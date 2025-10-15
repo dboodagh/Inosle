@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>16-Zone Insole Pressure Visualizer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        font-family: "Inter", sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+      .insole-zone {
+        transition: fill 0.1s ease-in-out;
+        stroke: #000000;
+        stroke-width: 4;
+        stroke-linejoin: round;
+      }
+      .insole-zone-text {
+        font-size: 20px;
+        font-weight: 600;
+        fill: #000000;
+        pointer-events: none;
+        text-anchor: middle;
+        dominant-baseline: middle;
+      }
+    </style>
+  </head>
+  <body
+    class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 flex items-center justify-center min-h-screen p-4"
+  >
+    <div
+      class="w-full max-w-4xl bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 md:p-8"
+    >
+      <header class="text-center mb-6">
+        <h1 class="text-3xl font-bold text-gray-900 dark:text-white">
+          Insole Pressure Visualizer (16-Zone)
+        </h1>
+        <p class="text-gray-600 dark:text-gray-400 mt-2">
+          Connect to your Arduino to see real-time foot pressure data.
+        </p>
+      </header>
+
+      <main class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+        <!-- Left Column: Controls and Status -->
+        <div class="flex flex-col space-y-6">
+          <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+            <h2 class="text-lg font-semibold mb-3">Controls</h2>
+            <button
+              id="connect-button"
+              class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300 ease-in-out focus:outline-none focus:ring-4 focus:ring-blue-300 dark:focus:ring-blue-800"
+            >
+              Connect to Arduino
+            </button>
+          </div>
+
+          <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+            <h2 class="text-lg font-semibold mb-2">Status & Raw Data</h2>
+            <div
+              id="status-display"
+              class="text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-600 rounded p-3 text-xs font-mono break-all"
+            >
+              Awaiting connection...
+            </div>
+          </div>
+
+          <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+            <h2 class="text-lg font-semibold mb-3">Color Legend</h2>
+            <div
+              class="w-full h-8 rounded-lg bg-gradient-to-r from-green-400 via-yellow-400 to-red-500"
+            ></div>
+            <div
+              class="flex justify-between text-sm mt-1 text-gray-600 dark:text-gray-400"
+            >
+              <span>Low Pressure</span>
+              <span>High Pressure</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column: Insole Visualization -->
+        <div class="flex justify-center items-center">
+          <svg
+            width="400"
+            height="700"
+            viewBox="-100 -100 500 800"
+            xmlns="http://www.w3.org/2000/svg"
+            id="insole-svg"
+          >
+            <!-- Outline has been removed -->
+            <g
+              transform="translate(-100.000000,760.000000) scale(0.190000,-0.150000)"
+              fill="#000000"
+              stroke="none"
+            >
+              <path
+                d="M1524 5790 c-397 -85 -767 -664 -909 -1420 -15 -80 -38 -202 -51
+-271 -41 -220 -57 -375 -57 -559 0 -197 17 -329 62 -485 56 -193 76 -363 91
+-748 13 -325 24 -459 60 -707 58 -395 71 -468 125 -714 66 -302 99 -382 201
+-484 125 -125 311 -183 478 -149 182 37 352 163 431 317 46 91 55 143 55 321
+0 229 -22 397 -102 769 -50 236 -68 366 -68 510 0 310 56 502 229 777 149 236
+236 451 325 799 l46 182 0 203 c0 112 -5 256 -10 319 -63 694 -315 1201 -655
+1321 -67 23 -188 33 -251 19z m255 -38 c296 -115 522 -526 612 -1117 16 -109
+22 -204 26 -425 5 -283 5 -286 -22 -390 -108 -430 -178 -606 -353 -885 -143
+-229 -193 -374 -214 -629 -16 -190 -1 -345 61 -641 111 -522 136 -839 80
+-1012 -42 -129 -155 -257 -290 -328 -287 -151 -634 -18 -746 285 -21 56 -113
+462 -132 580 -92 577 -107 709 -121 1077 -16 415 -37 579 -108 853 -31 121
+-52 290 -52 428 0 113 26 347 56 510 14 76 34 187 44 247 91 518 288 972 534
+1232 118 125 220 193 346 229 65 19 212 12 279 -14z"
+              />
+            </g>
+            <!-- Toes (Original right foot positions) -->
+            <path
+              id="zone-P"
+              class="insole-zone"
+              d="M170,50 a40,40 0 1,1 80,0 a40,40 0 1,1 -80,0"
+              fill="#d1d5db"
+            />
+            <text x="210" y="50" class="insole-zone-text">P</text>
+            <path
+              id="zone-O"
+              class="insole-zone"
+              d="M120,60 a25,25 0 1,1 50,0 a25,25 0 1,1 -50,0"
+              fill="#d1d5db"
+            />
+            <text x="145" y="60" class="insole-zone-text">O</text>
+            <path
+              id="zone-N"
+              class="insole-zone"
+              d="M80,80 a20,20 0 1,1 40,0 a20,20 0 1,1 -40,0"
+              fill="#d1d5db"
+            />
+            <text x="100" y="80" class="insole-zone-text">N</text>
+
+            <!-- Ball (Original right foot positions) -->
+            <path
+              id="zone-A"
+              class="insole-zone"
+              d="M40,150 h80 v50 h-80 z"
+              fill="#d1d5db"
+            />
+            <text x="80" y="175" class="insole-zone-text">A</text>
+            <path
+              id="zone-B"
+              class="insole-zone"
+              d="M130,150 h80 v50 h-80 z"
+              fill="#d1d5db"
+            />
+            <text x="170" y="175" class="insole-zone-text">B</text>
+            <path
+              id="zone-C"
+              class="insole-zone"
+              d="M220,150 h80 v50 h-80 z"
+              fill="#d1d5db"
+            />
+            <text x="260" y="175" class="insole-zone-text">C</text>
+            <path
+              id="zone-D"
+              class="insole-zone"
+              d="M40,210 h80 v50 h-80 z"
+              fill="#d1d5db"
+            />
+            <text x="80" y="235" class="insole-zone-text">D</text>
+            <path
+              id="zone-E"
+              class="insole-zone"
+              d="M130,210 h80 v50 h-80 z"
+              fill="#d1d5db"
+            />
+            <text x="170" y="235" class="insole-zone-text">E</text>
+            <path
+              id="zone-F"
+              class="insole-zone"
+              d="M220,210 h80 v50 h-80 z"
+              fill="#d1d5db"
+            />
+            <text x="260" y="235" class="insole-zone-text">F</text>
+
+            <!-- Arch (Original right foot positions, G is a rectangle) -->
+            <path
+              id="zone-G"
+              class="insole-zone"
+              d="M50,280 h110 v60 h-110 z"
+              fill="#d1d5db"
+            />
+            <text x="105" y="310" class="insole-zone-text">G</text>
+            <path
+              id="zone-H"
+              class="insole-zone"
+              d="M50,350 h110 v60 h-110 z"
+              fill="#d1d5db"
+            />
+            <text x="105" y="380" class="insole-zone-text">H</text>
+            <path
+              id="zone-I"
+              class="insole-zone"
+              d="M50,420 h110 v60 h-110 z"
+              fill="#d1d5db"
+            />
+            <text x="105" y="450" class="insole-zone-text">I</text>
+
+            <!-- Heel (Original right foot positions) -->
+            <path
+              id="zone-J"
+              class="insole-zone"
+              d="M70,510 h80 v50 h-80 z"
+              fill="#d1d5db"
+            />
+            <text x="110" y="535" class="insole-zone-text">J</text>
+            <path
+              id="zone-K"
+              class="insole-zone"
+              d="M180,510 h80 v50 h-80 z"
+              fill="#d1d5db"
+            />
+            <text x="220" y="535" class="insole-zone-text">K</text>
+            <path
+              id="zone-L"
+              class="insole-zone"
+              d="M70,590 h80 v50 h-80 z"
+              fill="#d1d5db"
+            />
+            <text x="110" y="615" class="insole-zone-text">L</text>
+            <path
+              id="zone-M"
+              class="insole-zone"
+              d="M180,590 h80 v50 h-80 z"
+              fill="#d1d5db"
+            />
+            <text x="220" y="615" class="insole-zone-text">M</text>
+          </svg>
+        </div>
+      </main>
+    </div>
+
+    <script>
+      const connectButton = document.getElementById("connect-button");
+      const statusDisplay = document.getElementById("status-display");
+      const insoleSVG = document.getElementById("insole-svg");
+      let port;
+
+      const zoneRanges = {
+        A: { min: 12, max: 24 },
+        B: { min: 34, max: 52 },
+        C: { min: 16, max: 35 },
+        D: { min: 53, max: 72 },
+        E: { min: 33, max: 36 },
+        F: { min: 57, max: 61 },
+        G: { min: 43, max: 49 },
+        H: { min: 58, max: 76 },
+        I: { min: 33, max: 37 },
+        J: { min: 44, max: 62 },
+        K: { min: 29, max: 48 },
+        L: { min: 60, max: 68 },
+        M: { min: 49, max: 51 },
+        N: { min: 73, max: 76 },
+        O: { min: 60, max: 65 },
+        P: { min: 70, max: 75 },
+      };
+
+      if (!("serial" in navigator)) {
+        statusDisplay.textContent = "Error: Web Serial API not supported.";
+        connectButton.disabled = true;
+        connectButton.classList.add("opacity-50", "cursor-not-allowed");
+      }
+
+      connectButton.addEventListener("click", async () => {
+        if (port && port.readable) {
+          if (window.reader) {
+            try {
+              await window.reader.cancel();
+            } catch (error) {
+              /* Ignore cancel error */
+            }
+          }
+          try {
+            await port.close();
+          } catch (error) {
+            /* Ignore close error */
+          }
+          port = undefined;
+          window.reader = undefined;
+          connectButton.textContent = "Connect to Arduino";
+          statusDisplay.textContent = "Disconnected.";
+          resetInsoleColors();
+        } else {
+          await connectAndRead();
+        }
+      });
+
+      async function connectAndRead() {
+        try {
+          port = await navigator.serial.requestPort();
+          await port.open({ baudRate: 9600 });
+          statusDisplay.textContent = "Connected. Reading data...";
+          connectButton.textContent = "Disconnect";
+
+          const textDecoder = new TextDecoderStream();
+          const readableStreamClosed = port.readable.pipeTo(
+            textDecoder.writable
+          );
+          window.reader = textDecoder.readable.getReader();
+
+          let lineBuffer = "";
+          while (true) {
+            const { value, done } = await window.reader.read();
+            if (done) {
+              window.reader.releaseLock();
+              break;
+            }
+            lineBuffer += value;
+            const lines = lineBuffer.split("\n");
+            lineBuffer = lines.pop();
+
+            for (const line of lines) {
+              if (line.trim()) {
+                processSerialLine(line.trim());
+              }
+            }
+          }
+        } catch (error) {
+          statusDisplay.textContent = `Error: ${error.message}`;
+          if (port && port.readable) {
+            await port.close();
+          }
+          port = undefined;
+          connectButton.textContent = "Connect to Arduino";
+        }
+      }
+
+      /**
+       * Processes a single line of serial data.
+       * Expected format: "A012B034...P789" (Ignores Q)
+       * @param {string} line - The data line from Arduino.
+       */
+      function processSerialLine(line) {
+        statusDisplay.textContent = line;
+        const regex = /([A-P])(\d{3})/g;
+        let match;
+        while ((match = regex.exec(line)) !== null) {
+          const zoneId = match[1];
+          const pressureValue = parseInt(match[2], 10);
+          updateInsoleZone(zoneId, pressureValue);
+        }
+      }
+
+      function updateInsoleZone(zoneId, pressure) {
+        const element = document.getElementById(`zone-${zoneId}`);
+        if (element) {
+          element.style.fill = pressureToColor(pressure, zoneId);
+        }
+      }
+
+      /**
+       * Converts a pressure value to a color based on its specific min/max range.
+       * @param {number} pressure - The raw pressure value from the sensor.
+       * @param {string} zoneId - The ID of the zone (e.g., 'A', 'B').
+       * @returns {string} The HSL color string.
+       */
+      function pressureToColor(pressure, zoneId) {
+        const range = zoneRanges[zoneId];
+        if (!range) {
+          return "#d1d5db"; // Default gray if range not found
+        }
+
+        const clampedPressure = Math.max(
+          range.min,
+          Math.min(range.max, pressure)
+        );
+        const rangeSize = range.max - range.min;
+
+        const normalized =
+          rangeSize > 0 ? (clampedPressure - range.min) / rangeSize : 0.5;
+
+        const hue = 120 - normalized * 120;
+        return `hsl(${hue}, 90%, 55%)`;
+      }
+
+      function resetInsoleColors() {
+        const zones = insoleSVG.querySelectorAll(".insole-zone");
+        zones.forEach((zone) => {
+          zone.style.fill = "#d1d5db";
+        });
+      }
+    </script>
+  </body>
+</html>
