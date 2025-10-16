@@ -29,6 +29,10 @@
         text-anchor: middle;
         dominant-baseline: middle;
       }
+      .btn-disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
     </style>
   </head>
   <body
@@ -42,7 +46,7 @@
           Insole Pressure Visualizer (16-Zone)
         </h1>
         <p class="text-gray-600 dark:text-gray-400 mt-2">
-          Connect to your Arduino to see real-time foot pressure data.
+          Connect to your device via USB Serial or Bluetooth LE.
         </p>
       </header>
 
@@ -51,19 +55,27 @@
         <div class="flex flex-col space-y-6">
           <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
             <h2 class="text-lg font-semibold mb-3">Controls</h2>
-            <button
-              id="connect-button"
-              class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300 ease-in-out focus:outline-none focus:ring-4 focus:ring-blue-300 dark:focus:ring-blue-800"
-            >
-              Connect to Arduino
-            </button>
+            <div class="flex flex-col space-y-3">
+              <button
+                id="connect-serial-button"
+                class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300 ease-in-out focus:outline-none focus:ring-4 focus:ring-blue-300 dark:focus:ring-blue-800"
+              >
+                Connect via USB
+              </button>
+              <button
+                id="connect-bluetooth-button"
+                class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300 ease-in-out focus:outline-none focus:ring-4 focus:ring-indigo-300 dark:focus:ring-indigo-800"
+              >
+                Connect via Bluetooth
+              </button>
+            </div>
           </div>
 
           <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
             <h2 class="text-lg font-semibold mb-2">Status & Raw Data</h2>
             <div
               id="status-display"
-              class="text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-600 rounded p-3 text-xs font-mono break-all"
+              class="text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-600 rounded p-3 text-xs font-mono break-all min-h-[4rem]"
             >
               Awaiting connection...
             </div>
@@ -89,7 +101,7 @@
             width="400"
             height="700"
             viewBox="-100 -100 500 800"
-            xmlns="http://www.w.org/2000/svg"
+            xmlns="http://www.w3.org/2000/svg"
             id="insole-svg"
           >
             <!-- Outline -->
@@ -253,10 +265,25 @@
     </div>
 
     <script>
-      const connectButton = document.getElementById("connect-button");
+      const connectSerialButton = document.getElementById(
+        "connect-serial-button"
+      );
+      const connectBluetoothButton = document.getElementById(
+        "connect-bluetooth-button"
+      );
       const statusDisplay = document.getElementById("status-display");
       const insoleSVG = document.getElementById("insole-svg");
+
+      // Web Serial state
       let port;
+      let reader;
+
+      // Web Bluetooth state
+      let bluetoothDevice;
+      let dataCharacteristic;
+      const UART_SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+      const UART_RX_CHARACTERISTIC_UUID =
+        "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
 
       const zoneRanges = {
         A: { min: 12, max: 24 },
@@ -277,54 +304,71 @@
         P: { min: 70, max: 75 },
       };
 
+      // --- Feature Detection ---
       if (!("serial" in navigator)) {
         statusDisplay.textContent = "Error: Web Serial API not supported.";
-        connectButton.disabled = true;
-        connectButton.classList.add("opacity-50", "cursor-not-allowed");
+        connectSerialButton.disabled = true;
+        connectSerialButton.classList.add("btn-disabled");
+      }
+      if (!("bluetooth" in navigator)) {
+        statusDisplay.textContent = "Error: Web Bluetooth API not supported.";
+        connectBluetoothButton.disabled = true;
+        connectBluetoothButton.classList.add("btn-disabled");
       }
 
-      connectButton.addEventListener("click", async () => {
-        if (port && port.readable) {
-          if (window.reader) {
-            try {
-              await window.reader.cancel();
-            } catch (error) {
-              /* Ignore cancel error */
-            }
-          }
-          try {
-            await port.close();
-          } catch (error) {
-            /* Ignore close error */
-          }
-          port = undefined;
-          window.reader = undefined;
-          connectButton.textContent = "Connect to Arduino";
-          statusDisplay.textContent = "Disconnected.";
-          resetInsoleColors();
+      // --- UI Management ---
+      function setUIConnected(isSerial) {
+        if (isSerial) {
+          connectSerialButton.textContent = "Disconnect USB";
+          connectBluetoothButton.disabled = true;
+          connectBluetoothButton.classList.add("btn-disabled");
         } else {
-          await connectAndRead();
+          connectBluetoothButton.textContent = "Disconnect Bluetooth";
+          connectSerialButton.disabled = true;
+          connectSerialButton.classList.add("btn-disabled");
+        }
+      }
+
+      function setUIDisconnected() {
+        connectSerialButton.textContent = "Connect via USB";
+        connectBluetoothButton.textContent = "Connect via Bluetooth";
+        if ("serial" in navigator) {
+          connectSerialButton.disabled = false;
+          connectSerialButton.classList.remove("btn-disabled");
+        }
+        if ("bluetooth" in navigator) {
+          connectBluetoothButton.disabled = false;
+          connectBluetoothButton.classList.remove("btn-disabled");
+        }
+        statusDisplay.textContent = "Disconnected.";
+        resetInsoleColors();
+      }
+
+      // --- Web Serial Logic ---
+      connectSerialButton.addEventListener("click", async () => {
+        if (port) {
+          await disconnectSerial();
+        } else {
+          await connectSerial();
         }
       });
 
-      async function connectAndRead() {
+      async function connectSerial() {
         try {
           port = await navigator.serial.requestPort();
           await port.open({ baudRate: 9600 });
-          statusDisplay.textContent = "Connected. Reading data...";
-          connectButton.textContent = "Disconnect";
+          statusDisplay.textContent = "Connected via USB. Reading data...";
+          setUIConnected(true);
 
           const textDecoder = new TextDecoderStream();
-          const readableStreamClosed = port.readable.pipeTo(
-            textDecoder.writable
-          );
-          window.reader = textDecoder.readable.getReader();
+          port.readable.pipeTo(textDecoder.writable);
+          reader = textDecoder.readable.getReader();
 
           let lineBuffer = "";
           while (true) {
-            const { value, done } = await window.reader.read();
+            const { value, done } = await reader.read();
             if (done) {
-              window.reader.releaseLock();
+              reader.releaseLock();
               break;
             }
             lineBuffer += value;
@@ -333,26 +377,116 @@
 
             for (const line of lines) {
               if (line.trim()) {
-                processSerialLine(line.trim());
+                processDataLine(line.trim());
               }
             }
           }
         } catch (error) {
-          statusDisplay.textContent = `Error: ${error.message}`;
-          if (port && port.readable) {
-            await port.close();
-          }
-          port = undefined;
-          connectButton.textContent = "Connect to Arduino";
+          statusDisplay.textContent = `Serial Error: ${error.message}`;
+          await disconnectSerial();
         }
       }
 
-      /**
-       * Processes a single line of serial data.
-       * Expected format: "A012B034...P789" (Ignores Q)
-       * @param {string} line - The data line from Arduino.
-       */
-      function processSerialLine(line) {
+      async function disconnectSerial() {
+        if (reader) {
+          try {
+            await reader.cancel();
+            reader.releaseLock();
+          } catch (error) {
+            /* Ignore cancel error */
+          }
+        }
+        if (port) {
+          try {
+            await port.close();
+          } catch (error) {
+            /* Ignore close error */
+          }
+        }
+        port = undefined;
+        reader = undefined;
+        setUIDisconnected();
+      }
+
+      // --- Web Bluetooth Logic ---
+      connectBluetoothButton.addEventListener("click", async () => {
+        if (bluetoothDevice && bluetoothDevice.gatt.connected) {
+          await disconnectBluetooth();
+        } else {
+          await connectBluetooth();
+        }
+      });
+
+      async function connectBluetooth() {
+        try {
+          statusDisplay.textContent = "Requesting Bluetooth device...";
+          bluetoothDevice = await navigator.bluetooth.requestDevice({
+            filters: [{ services: [UART_SERVICE_UUID] }],
+          });
+
+          statusDisplay.textContent = "Connecting to GATT Server...";
+          bluetoothDevice.addEventListener(
+            "gattserverdisconnected",
+            onBluetoothDisconnected
+          );
+          const server = await bluetoothDevice.gatt.connect();
+
+          statusDisplay.textContent = "Getting Service...";
+          const service = await server.getPrimaryService(UART_SERVICE_UUID);
+
+          statusDisplay.textContent = "Getting Characteristic...";
+          dataCharacteristic = await service.getCharacteristic(
+            UART_RX_CHARACTERISTIC_UUID
+          );
+
+          await dataCharacteristic.startNotifications();
+          dataCharacteristic.addEventListener(
+            "characteristicvaluechanged",
+            handleNotifications
+          );
+
+          statusDisplay.textContent =
+            "Connected via Bluetooth. Listening for data...";
+          setUIConnected(false);
+        } catch (error) {
+          statusDisplay.textContent = `Bluetooth Error: ${error.message}`;
+          await disconnectBluetooth();
+        }
+      }
+
+      async function disconnectBluetooth() {
+        if (!bluetoothDevice) return;
+        if (bluetoothDevice.gatt.connected) {
+          bluetoothDevice.gatt.disconnect();
+        }
+        bluetoothDevice = null;
+        dataCharacteristic = null;
+        setUIDisconnected();
+      }
+
+      function onBluetoothDisconnected() {
+        statusDisplay.textContent = "Bluetooth device disconnected.";
+        disconnectBluetooth();
+      }
+
+      let bleLineBuffer = "";
+      function handleNotifications(event) {
+        const value = event.target.value;
+        const decoder = new TextDecoder();
+        bleLineBuffer += decoder.decode(value);
+
+        const lines = bleLineBuffer.split("\n");
+        bleLineBuffer = lines.pop(); // Keep the last partial line
+
+        for (const line of lines) {
+          if (line.trim()) {
+            processDataLine(line.trim());
+          }
+        }
+      }
+
+      // --- Shared Data Processing Logic ---
+      function processDataLine(line) {
         statusDisplay.textContent = line;
         const regex = /([A-P])(\d{3})/g;
         let match;
@@ -370,16 +504,10 @@
         }
       }
 
-      /**
-       * Converts a pressure value to a color based on its specific min/max range.
-       * @param {number} pressure - The raw pressure value from the sensor.
-       * @param {string} zoneId - The ID of the zone (e.g., 'A', 'B').
-       * @returns {string} The HSL color string.
-       */
       function pressureToColor(pressure, zoneId) {
         const range = zoneRanges[zoneId];
         if (!range) {
-          return "#d1d5db"; // Default gray if range not found
+          return "#d1d5db"; // Default gray
         }
 
         const clampedPressure = Math.max(
@@ -391,7 +519,7 @@
         const normalized =
           rangeSize > 0 ? (clampedPressure - range.min) / rangeSize : 0.5;
 
-        const hue = 120 - normalized * 120;
+        const hue = 120 - normalized * 120; // 120 (green) -> 0 (red)
         return `hsl(${hue}, 90%, 55%)`;
       }
 
