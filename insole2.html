@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Smart Insole Monitor (USB + BLE)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        font-family: "Inter", sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+      .insole-zone {
+        transition: fill 0.05s linear;
+        stroke: #374151;
+        stroke-width: 1.5;
+        stroke-linejoin: round;
+        /* Dashed line to match the technical drawing look */
+        stroke-dasharray: 4 2;
+      }
+      .insole-zone-text {
+        font-size: 18px;
+        font-weight: 700;
+        fill: #1f2937;
+        pointer-events: none;
+        text-anchor: middle;
+        dominant-baseline: middle;
+        opacity: 0.7;
+      }
+      .btn-disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body
+    class="bg-gray-100 text-gray-800 flex items-center justify-center min-h-screen p-4"
+  >
+    <div class="w-full max-w-5xl bg-white rounded-2xl shadow-xl p-6 md:p-8">
+      <header class="text-center mb-8">
+        <h1 class="text-3xl font-bold text-gray-900">Smart Insole Monitor</h1>
+        <p class="text-gray-500 mt-2">Dual Mode: USB Serial & Bluetooth LE</p>
+      </header>
+
+      <main class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
+        <div class="flex flex-col space-y-6">
+          <div class="bg-gray-50 border border-gray-200 p-6 rounded-xl">
+            <h2 class="text-lg font-semibold mb-4 text-gray-700">Connection</h2>
+
+            <div class="flex flex-col gap-3">
+              <button
+                id="connect-usb-button"
+                class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-xl transition duration-200 shadow-sm flex items-center justify-center gap-2"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  class="h-6 w-6"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"
+                  />
+                </svg>
+                Connect USB Serial
+              </button>
+
+              <button
+                id="connect-ble-button"
+                class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl transition duration-200 shadow-sm flex items-center justify-center gap-2"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  class="h-6 w-6"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 008 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.2-2.858.59-4.18"
+                  />
+                </svg>
+                Connect Bluetooth
+              </button>
+            </div>
+
+            <p
+              id="status-display"
+              class="mt-4 text-sm text-center text-gray-500 font-mono"
+            >
+              Ready to connect...
+            </p>
+          </div>
+
+          <div class="bg-gray-50 border border-gray-200 p-6 rounded-xl">
+            <h2 class="text-lg font-semibold mb-3 text-gray-700">
+              Pressure Intensity
+            </h2>
+            <div
+              class="w-full h-6 rounded-full bg-gradient-to-r from-green-400 via-yellow-400 to-red-600 shadow-inner"
+            ></div>
+            <div
+              class="flex justify-between text-xs mt-2 text-gray-500 font-medium"
+            >
+              <span>0 (Light)</span>
+              <span>128 (Medium)</span>
+              <span>255 (Heavy)</span>
+            </div>
+          </div>
+
+          <div
+            class="bg-gray-900 text-green-400 p-4 rounded-xl font-mono text-xs overflow-hidden"
+          >
+            <div
+              class="flex justify-between mb-2 border-b border-gray-700 pb-1"
+            >
+              <span>RAW DATA STREAM</span>
+            </div>
+            <div
+              id="raw-data-display"
+              class="grid grid-cols-8 gap-2 text-center"
+            ></div>
+          </div>
+        </div>
+
+        <div
+          class="flex justify-center items-center bg-gray-50 rounded-2xl p-4 border border-gray-200"
+        >
+          <svg
+            width="350"
+            height="850"
+            viewBox="0 0 350 700"
+            xmlns="http://www.w3.org/2000/svg"
+            id="insole-svg"
+          >
+            <g
+              id="insole-outline"
+              transform="translate(-90.000000,788.000000) scale(0.180000,-0.145000)"
+              stroke="none"
+              fill="#e5e7eb"
+            >
+              <path
+                d="M1524 5790 c-397 -85 -767 -664 -909 -1420 -15 -80 -38 -202 -51
+-271 -41 -220 -57 -375 -57 -559 0 -197 17 -329 62 -485 56 -193 76 -363 91
+-748 13 -325 24 -459 60 -707 58 -395 71 -468 125 -714 66 -302 99 -382 201
+-484 125 -125 311 -183 478 -149 182 37 352 163 431 317 46 91 55 143 55 321
+0 229 -22 397 -102 769 -50 236 -68 366 -68 510 0 310 56 502 229 777 149 236
+236 451 325 799 l46 182 0 203 c0 112 -5 256 -10 319 -63 694 -315 1201 -655
+1321 -67 23 -188 33 -251 19z m255 -38 c296 -115 522 -526 612 -1117 16 -109
+22 -204 26 -425 5 -283 5 -286 -22 -390 -108 -430 -178 -606 -353 -885 -143
+-229 -193 -374 -214 -629 -16 -190 -1 -345 61 -641 111 -522 136 -839 80
+-1012 -42 -129 -155 -257 -290 -328 -287 -151 -634 -18 -746 285 -21 56 -113
+462 -132 580 -92 577 -107 709 -121 1077 -16 415 -37 579 -108 853 -31 121
+-52 290 -52 428 0 113 26 347 56 510 14 76 34 187 44 247 91 518 288 972 534
+1232 118 125 220 193 346 229 65 19 212 12 279 -14z"
+              />
+            </g>
+
+            <g transform="translate(0, 0)">
+              <ellipse
+                id="zone-0"
+                class="insole-zone"
+                cx="255"
+                cy="70"
+                rx="42"
+                ry="55"
+                fill="#d1d5db"
+              />
+              <text x="255" y="70" class="insole-zone-text">0</text>
+
+              <ellipse
+                id="zone-1"
+                class="insole-zone"
+                cx="175"
+                cy="65"
+                rx="28"
+                ry="38"
+                fill="#d1d5db"
+              />
+              <text x="175" y="65" class="insole-zone-text">1</text>
+
+              <ellipse
+                id="zone-2"
+                class="insole-zone"
+                cx="115"
+                cy="80"
+                rx="25"
+                ry="32"
+                fill="#d1d5db"
+              />
+              <text x="115" y="80" class="insole-zone-text">2</text>
+
+              <circle
+                id="zone-3"
+                class="insole-zone"
+                cx="65"
+                cy="110"
+                r="22"
+                fill="#d1d5db"
+              />
+              <text x="65" y="110" class="insole-zone-text">3</text>
+
+              <circle
+                id="zone-4"
+                class="insole-zone"
+                cx="285"
+                cy="200"
+                r="40"
+                fill="#d1d5db"
+              />
+              <text x="285" y="200" class="insole-zone-text">4</text>
+
+              <circle
+                id="zone-5"
+                class="insole-zone"
+                cx="205"
+                cy="180"
+                r="40"
+                fill="#d1d5db"
+              />
+              <text x="205" y="180" class="insole-zone-text">5</text>
+
+              <circle
+                id="zone-6"
+                class="insole-zone"
+                cx="125"
+                cy="200"
+                r="40"
+                fill="#d1d5db"
+              />
+              <text x="125" y="200" class="insole-zone-text">6</text>
+
+              <circle
+                id="zone-7"
+                class="insole-zone"
+                cx="60"
+                cy="250"
+                r="40"
+                fill="#d1d5db"
+              />
+              <text x="60" y="250" class="insole-zone-text">7</text>
+
+              <circle
+                id="zone-8"
+                class="insole-zone"
+                cx="60"
+                cy="332"
+                r="38"
+                fill="#d1d5db"
+              />
+              <text x="60" y="332" class="insole-zone-text">8</text>
+
+              <circle
+                id="zone-9"
+                class="insole-zone"
+                cx="70"
+                cy="410"
+                r="36"
+                fill="#d1d5db"
+              />
+              <text x="70" y="410" class="insole-zone-text">9</text>
+
+              <circle
+                id="zone-10"
+                class="insole-zone"
+                cx="90"
+                cy="490"
+                r="38"
+                fill="#d1d5db"
+              />
+              <text x="90" y="490" class="insole-zone-text">10</text>
+
+              <circle
+                id="zone-11"
+                class="insole-zone"
+                cx="190"
+                cy="380"
+                r="40"
+                fill="#d1d5db"
+              />
+              <text x="190" y="380" class="insole-zone-text">11</text>
+
+              <circle
+                id="zone-12"
+                class="insole-zone"
+                cx="155"
+                cy="540"
+                r="38"
+                fill="#d1d5db"
+              />
+              <text x="155" y="540" class="insole-zone-text">12</text>
+
+              <circle
+                id="zone-13"
+                class="insole-zone"
+                cx="210"
+                cy="610"
+                r="38"
+                fill="#d1d5db"
+              />
+              <text x="210" y="610" class="insole-zone-text">13</text>
+
+              <circle
+                id="zone-15"
+                class="insole-zone"
+                cx="105"
+                cy="610"
+                r="38"
+                fill="#d1d5db"
+              />
+              <text x="105" y="610" class="insole-zone-text">15</text>
+
+              <circle
+                id="zone-14"
+                class="insole-zone"
+                cx="160"
+                cy="680"
+                r="42"
+                fill="#d1d5db"
+              />
+              <text x="160" y="680" class="insole-zone-text">14</text>
+            </g>
+          </svg>
+        </div>
+      </main>
+      <footer class="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+        <div class="flex items-center space-x-6">
+          <img
+            src="img/Logo-Sapienza.png"
+            alt="Sapienza Logo"
+            class="h-16 bg-white p-2 rounded-md"
+          />
+          <img
+            src="img/D3-4-Health-Logo.png"
+            alt="DDD4Health Logo"
+            class="h-16 bg-white p-2 rounded-md"
+          />
+        </div>
+      </footer>
+    </div>
+
+    <script>
+      const connectUsbBtn = document.getElementById("connect-usb-button");
+      const connectBleBtn = document.getElementById("connect-ble-button");
+      const statusDisplay = document.getElementById("status-display");
+      const rawDisplay = document.getElementById("raw-data-display");
+
+      // BLE Config
+      const SERVICE_UUID = "19b10000-e8f2-537e-4f6c-d104768a1214";
+      const CHARACTERISTIC_UUID = "19b10001-e8f2-537e-4f6c-d104768a1214";
+
+      // Global State
+      let bluetoothDevice;
+      let serialPort;
+      let serialReader;
+      let isConnected = false;
+
+      // Check API Support
+      if (!("bluetooth" in navigator))
+        disableBtn(connectBleBtn, "Bluetooth not supported");
+      if (!("serial" in navigator))
+        disableBtn(connectUsbBtn, "Web Serial not supported");
+
+      function disableBtn(btn, msg) {
+        btn.disabled = true;
+        btn.classList.add("btn-disabled");
+        btn.title = msg;
+      }
+
+      function updateUIConnected(mode) {
+        isConnected = true;
+        statusDisplay.textContent = `🟢 Connected via ${mode}`;
+        statusDisplay.className =
+          "mt-4 text-sm text-center text-green-600 font-bold";
+
+        if (mode === "USB") {
+          connectUsbBtn.textContent = "Disconnect USB";
+          connectUsbBtn.classList.replace("bg-blue-600", "bg-red-600");
+          connectUsbBtn.classList.replace(
+            "hover:bg-blue-700",
+            "hover:bg-red-700"
+          );
+          disableBtn(connectBleBtn, "Busy");
+        } else {
+          connectBleBtn.textContent = "Disconnect BLE";
+          connectBleBtn.classList.replace("bg-indigo-600", "bg-red-600");
+          connectBleBtn.classList.replace(
+            "hover:bg-indigo-700",
+            "hover:bg-red-700"
+          );
+          disableBtn(connectUsbBtn, "Busy");
+        }
+      }
+
+      function updateUIDisconnected() {
+        isConnected = false;
+        statusDisplay.textContent = "Disconnected.";
+        statusDisplay.className =
+          "mt-4 text-sm text-center text-gray-500 font-mono";
+
+        // Reset USB Btn
+        connectUsbBtn.disabled = false;
+        connectUsbBtn.textContent = "Connect USB Serial";
+        connectUsbBtn.className =
+          "w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-xl transition duration-200 shadow-sm flex items-center justify-center gap-2";
+
+        // Reset BLE Btn
+        connectBleBtn.disabled = false;
+        connectBleBtn.textContent = "Connect Bluetooth";
+        connectBleBtn.className =
+          "w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl transition duration-200 shadow-sm flex items-center justify-center gap-2";
+
+        resetColors();
+      }
+
+      // ============================================
+      //  USB SERIAL LOGIC
+      // ============================================
+      connectUsbBtn.addEventListener("click", async () => {
+        if (serialPort) {
+          await disconnectSerial();
+        } else {
+          await connectSerial();
+        }
+      });
+
+      async function connectSerial() {
+        try {
+          serialPort = await navigator.serial.requestPort();
+          await serialPort.open({ baudRate: 115200 }); // Must match Arduino
+          updateUIConnected("USB");
+          readSerialLoop();
+        } catch (err) {
+          console.error(err);
+          statusDisplay.textContent = "USB Error: " + err.message;
+        }
+      }
+
+      async function disconnectSerial() {
+        if (serialReader) {
+          await serialReader.cancel();
+          // The loop catches the error and closes port
+        }
+      }
+
+      async function readSerialLoop() {
+        const textDecoder = new TextDecoderStream();
+        // We use raw byte stream, so we don't want text decoder usually,
+        // but for binary we read directly from port.readable
+
+        serialReader = serialPort.readable.getReader();
+
+        // buffer to hold partial packets
+        let buffer = new Uint8Array(0);
+
+        try {
+          while (true) {
+            const { value, done } = await serialReader.read();
+            if (done) break;
+
+            // Append new data to buffer
+            const newBuffer = new Uint8Array(buffer.length + value.length);
+            newBuffer.set(buffer);
+            newBuffer.set(value, buffer.length);
+            buffer = newBuffer;
+
+            // Process full 16-byte packets
+            while (buffer.length >= 16) {
+              // Extract first 16 bytes
+              const packet = buffer.slice(0, 16);
+
+              // Update UI
+              updateVisuals(packet);
+
+              // Remove processed bytes from buffer
+              buffer = buffer.slice(16);
+            }
+          }
+        } catch (err) {
+          console.error("Read Error", err);
+        } finally {
+          serialReader.releaseLock();
+          await serialPort.close();
+          serialPort = null;
+          updateUIDisconnected();
+        }
+      }
+
+      // ============================================
+      //  BLUETOOTH LOGIC
+      // ============================================
+      connectBleBtn.addEventListener("click", async () => {
+        if (bluetoothDevice && bluetoothDevice.gatt.connected) {
+          bluetoothDevice.gatt.disconnect();
+        } else {
+          connectBle();
+        }
+      });
+
+      async function connectBle() {
+        try {
+          bluetoothDevice = await navigator.bluetooth.requestDevice({
+            // Mac prefers filtering by UUID, not Name
+            filters: [{ services: [SERVICE_UUID] }],
+          });
+          bluetoothDevice.addEventListener(
+            "gattserverdisconnected",
+            updateUIDisconnected
+          );
+          const server = await bluetoothDevice.gatt.connect();
+          const service = await server.getPrimaryService(SERVICE_UUID);
+          const characteristic = await service.getCharacteristic(
+            CHARACTERISTIC_UUID
+          );
+          await characteristic.startNotifications();
+          characteristic.addEventListener(
+            "characteristicvaluechanged",
+            handleBleData
+          );
+          updateUIConnected("BLE");
+        } catch (err) {
+          statusDisplay.textContent = "BLE Error: " + err.message;
+        }
+      }
+
+      function handleBleData(event) {
+        const dataView = event.target.value;
+        const packet = new Uint8Array(dataView.buffer);
+        updateVisuals(packet);
+      }
+
+      // ============================================
+      //  VISUALIZATION CORE
+      // ============================================
+      function updateVisuals(dataArray) {
+        let rawHtml = "";
+
+        for (let i = 0; i < 16; i++) {
+          const val = dataArray[i]; // 0-255
+          updateZoneColor(i, val);
+
+          // Debug Grid
+          rawHtml += `<div class="bg-gray-800 p-1 rounded text-white">${val}</div>`;
+        }
+        rawDisplay.innerHTML = rawHtml;
+      }
+
+      function updateZoneColor(index, value) {
+        const zoneEl = document.getElementById(`zone-${index}`);
+        if (zoneEl) {
+          zoneEl.style.fill = getHeatMapColor(value);
+        }
+      }
+
+      function getHeatMapColor(value) {
+        if (value < 15) return "#d1d5db"; // Threshold for 'off'
+        const normalized = value / 255;
+        const hue = 120 - normalized * 120;
+        return `hsl(${hue}, 100%, 50%)`;
+      }
+
+      function resetColors() {
+        for (let i = 0; i < 16; i++) {
+          const zoneEl = document.getElementById(`zone-${i}`);
+          if (zoneEl) zoneEl.style.fill = "#d1d5db";
+        }
+        rawDisplay.innerHTML = "";
+      }
+    </script>
+  </body>
+</html>
