@@ -20,7 +20,6 @@
         stroke: #374151;
         stroke-width: 1.5;
         stroke-linejoin: round;
-        /* Dashed line to match the technical drawing look */
         stroke-dasharray: 4 2;
       }
       .insole-zone-text {
@@ -36,6 +35,15 @@
         opacity: 0.5;
         cursor: not-allowed;
         pointer-events: none;
+      }
+      /* Blink animation for recording indicator */
+      @keyframes blink {
+        0% { opacity: 1; }
+        50% { opacity: 0.4; }
+        100% { opacity: 1; }
+      }
+      .recording-dot {
+        animation: blink 1.5s infinite;
       }
     </style>
   </head>
@@ -103,6 +111,30 @@
             >
               Ready to connect...
             </p>
+          </div>
+
+          <div class="bg-gray-50 border border-gray-200 p-6 rounded-xl">
+             <div class="flex justify-between items-center mb-3">
+                <h2 class="text-lg font-semibold text-gray-700">Data Recording</h2>
+                <div id="recording-indicator" class="hidden flex items-center text-red-600 font-bold text-sm">
+                   <div class="w-3 h-3 bg-red-600 rounded-full mr-2 recording-dot"></div>
+                   REC
+                </div>
+             </div>
+             
+             <button
+               id="record-button"
+               class="w-full bg-gray-700 hover:bg-gray-800 text-white font-bold py-3 px-6 rounded-xl transition duration-200 shadow-sm flex items-center justify-center gap-2 btn-disabled"
+               disabled
+             >
+               <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+               </svg>
+               Start Recording CSV
+             </button>
+             <p id="record-status" class="mt-2 text-xs text-center text-gray-500">
+                0 samples collected
+             </p>
           </div>
 
           <div class="bg-gray-50 border border-gray-200 p-6 rounded-xl">
@@ -358,6 +390,11 @@
       const statusDisplay = document.getElementById("status-display");
       const rawDisplay = document.getElementById("raw-data-display");
 
+      // Recording Elements
+      const recordBtn = document.getElementById("record-button");
+      const recordStatus = document.getElementById("record-status");
+      const recordingIndicator = document.getElementById("recording-indicator");
+
       // BLE Config
       const SERVICE_UUID = "19b10000-e8f2-537e-4f6c-d104768a1214";
       const CHARACTERISTIC_UUID = "19b10001-e8f2-537e-4f6c-d104768a1214";
@@ -367,6 +404,11 @@
       let serialPort;
       let serialReader;
       let isConnected = false;
+      
+      // Recording State
+      let isRecording = false;
+      let recordedData = []; // Array to store CSV rows
+      let startTime = 0;
 
       // Check API Support
       if (!("bluetooth" in navigator))
@@ -385,6 +427,10 @@
         statusDisplay.textContent = `🟢 Connected via ${mode}`;
         statusDisplay.className =
           "mt-4 text-sm text-center text-green-600 font-bold";
+
+        // Enable record button
+        recordBtn.disabled = false;
+        recordBtn.classList.remove("btn-disabled");
 
         if (mode === "USB") {
           connectUsbBtn.textContent = "Disconnect USB";
@@ -410,6 +456,11 @@
         statusDisplay.textContent = "Disconnected.";
         statusDisplay.className =
           "mt-4 text-sm text-center text-gray-500 font-mono";
+        
+        // Disable record button & stop recording if active
+        if (isRecording) stopRecording();
+        recordBtn.disabled = true;
+        recordBtn.classList.add("btn-disabled");
 
         // Reset USB Btn
         connectUsbBtn.disabled = false;
@@ -424,6 +475,84 @@
           "w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl transition duration-200 shadow-sm flex items-center justify-center gap-2";
 
         resetColors();
+      }
+
+      // ============================================
+      //  RECORDING LOGIC (New)
+      // ============================================
+      recordBtn.addEventListener("click", () => {
+         if (!isRecording) {
+            startRecording();
+         } else {
+            stopRecording();
+         }
+      });
+
+      function startRecording() {
+         isRecording = true;
+         recordedData = [];
+         startTime = Date.now();
+         
+         // UI Updates
+         recordBtn.textContent = "Stop Recording & Save";
+         recordBtn.classList.replace("bg-gray-700", "bg-red-600");
+         recordBtn.classList.replace("hover:bg-gray-800", "hover:bg-red-700");
+         recordingIndicator.classList.remove("hidden");
+         recordStatus.textContent = "Recording...";
+      }
+
+      function stopRecording() {
+         isRecording = false;
+         
+         // UI Updates
+         recordBtn.textContent = "Start Recording CSV";
+         recordBtn.classList.replace("bg-red-600", "bg-gray-700");
+         recordBtn.classList.replace("hover:bg-red-700", "hover:bg-gray-800");
+         recordingIndicator.classList.add("hidden");
+         
+         if (recordedData.length > 0) {
+            downloadCSV();
+            recordStatus.textContent = `Saved ${recordedData.length} samples.`;
+         } else {
+            recordStatus.textContent = "No data collected.";
+         }
+      }
+
+      function saveSample(dataArray) {
+         if (!isRecording) return;
+         
+         const timeOffset = Date.now() - startTime;
+         // Create a row: Time(ms), S0, S1, ..., S15
+         const row = [timeOffset, ...dataArray];
+         recordedData.push(row);
+         
+         // Update counter occasionally
+         if (recordedData.length % 10 === 0) {
+            recordStatus.textContent = `${recordedData.length} samples collected`;
+         }
+      }
+
+      function downloadCSV() {
+         // CSV Header
+         let csvContent = "Time(ms),Sensor0,Sensor1,Sensor2,Sensor3,Sensor4,Sensor5,Sensor6,Sensor7,Sensor8,Sensor9,Sensor10,Sensor11,Sensor12,Sensor13,Sensor14,Sensor15\n";
+         
+         // Rows
+         csvContent += recordedData.map(e => e.join(",")).join("\n");
+         
+         // Create Blob
+         const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+         const link = document.createElement("a");
+         const url = URL.createObjectURL(blob);
+         
+         // Filename with timestamp
+         const date = new Date();
+         const timestamp = date.toISOString().replace(/[:.]/g, "-");
+         link.setAttribute("href", url);
+         link.setAttribute("download", `insole_data_${timestamp}.csv`);
+         link.style.visibility = "hidden";
+         document.body.appendChild(link);
+         link.click();
+         document.body.removeChild(link);
       }
 
       // ============================================
@@ -458,12 +587,7 @@
 
       async function readSerialLoop() {
         const textDecoder = new TextDecoderStream();
-        // We use raw byte stream, so we don't want text decoder usually,
-        // but for binary we read directly from port.readable
-
         serialReader = serialPort.readable.getReader();
-
-        // buffer to hold partial packets
         let buffer = new Uint8Array(0);
 
         try {
@@ -471,21 +595,14 @@
             const { value, done } = await serialReader.read();
             if (done) break;
 
-            // Append new data to buffer
             const newBuffer = new Uint8Array(buffer.length + value.length);
             newBuffer.set(buffer);
             newBuffer.set(value, buffer.length);
             buffer = newBuffer;
 
-            // Process full 16-byte packets
             while (buffer.length >= 16) {
-              // Extract first 16 bytes
               const packet = buffer.slice(0, 16);
-
-              // Update UI
-              updateVisuals(packet);
-
-              // Remove processed bytes from buffer
+              processPacket(packet); // Common processing function
               buffer = buffer.slice(16);
             }
           }
@@ -513,7 +630,6 @@
       async function connectBle() {
         try {
           bluetoothDevice = await navigator.bluetooth.requestDevice({
-            // Mac prefers filtering by UUID, not Name
             filters: [{ services: [SERVICE_UUID] }],
           });
           bluetoothDevice.addEventListener(
@@ -539,20 +655,26 @@
       function handleBleData(event) {
         const dataView = event.target.value;
         const packet = new Uint8Array(dataView.buffer);
-        updateVisuals(packet);
+        processPacket(packet); // Common processing function
       }
 
       // ============================================
-      //  VISUALIZATION CORE
+      //  CORE PROCESSING (Visuals + Recording)
       // ============================================
+      function processPacket(dataArray) {
+         // 1. Update Visuals
+         updateVisuals(dataArray);
+         
+         // 2. Save Data if Recording
+         saveSample(dataArray);
+      }
+
       function updateVisuals(dataArray) {
         let rawHtml = "";
 
         for (let i = 0; i < 16; i++) {
           const val = dataArray[i]; // 0-255
           updateZoneColor(i, val);
-
-          // Debug Grid
           rawHtml += `<div class="bg-gray-800 p-1 rounded text-white">${val}</div>`;
         }
         rawDisplay.innerHTML = rawHtml;
