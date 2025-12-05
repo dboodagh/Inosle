@@ -1,437 +1,364 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ESP32 Sweat Sensor Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <style>
-      body {
-        font-family: "Inter", sans-serif;
-        background-color: #f7f9fb;
-      }
-      .card {
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
-          0 2px 4px -2px rgba(0, 0, 0, 0.06);
-      }
-      .toggle-checkbox:checked {
-        right: 0;
-        border-color: #4f46e5;
-      }
-      .toggle-checkbox:checked + .toggle-label {
-        background-color: #4f46e5;
-      }
-      .led-glow-green {
-        box-shadow: 0 0 10px #22c55e, 0 0 20px #22c55e inset;
-      }
-      .led-glow-red {
-        box-shadow: 0 0 10px #ef4444, 0 0 20px #ef4444 inset;
-      }
-
-      /* Battery Pulse Animation for Charging */
-      @keyframes pulse-charge {
-        0% {
-          opacity: 0.5;
+        body { font-family: 'Inter', sans-serif; background-color: #f7f9fb; }
+        .card { box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.06); }
+        .toggle-checkbox:checked { right: 0; border-color: #4F46E5; }
+        .toggle-checkbox:checked + .toggle-label { background-color: #4F46E5; }
+        .led-glow-green { box-shadow: 0 0 10px #22c55e, 0 0 20px #22c55e inset; }
+        .led-glow-red { box-shadow: 0 0 10px #ef4444, 0 0 20px #ef4444 inset; }
+        
+        /* Battery Pulse Animation for Charging */
+        @keyframes pulse-charge {
+            0% { opacity: 0.5; }
+            50% { opacity: 1; }
+            100% { opacity: 0.5; }
         }
-        50% {
-          opacity: 1;
-        }
-        100% {
-          opacity: 0.5;
-        }
-      }
-      .charging-anim {
-        animation: pulse-charge 2s infinite;
-      }
+        .charging-anim { animation: pulse-charge 2s infinite; }
     </style>
-  </head>
-  <body class="p-4 md:p-8">
+</head>
+<body class="p-4 md:p-8">
     <div id="app" class="max-w-4xl mx-auto">
-      <h1 class="text-3xl font-extrabold text-gray-800 mb-2 text-center">
-        Sweat Sensor Data Logger
-      </h1>
-      <p class="text-center text-gray-600 mb-8">ESP32-S3 (XIAO)</p>
+        <h1 class="text-3xl font-extrabold text-gray-800 mb-2 text-center">
+            Sweat Sensor Data Logger
+        </h1>
+        <p class="text-center text-gray-600 mb-8">ESP32-S3 (XIAO)</p>
 
-      <!-- Power & Connection Controls -->
-      <div class="card bg-white p-6 rounded-xl border border-indigo-100 mb-6">
-        <div
-          class="flex flex-col md:flex-row justify-between items-center gap-6"
-        >
-          <div class="flex items-center gap-4">
-            <div
-              class="relative inline-block w-12 mr-2 align-middle select-none transition duration-200 ease-in"
-            >
-              <input
-                type="checkbox"
-                name="toggle"
-                id="power-switch"
-                class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer border-gray-300 transition-all duration-300 left-0"
-              />
-              <label
-                for="power-switch"
-                class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer transition-colors duration-300"
-              ></label>
+        <!-- Power & Connection Controls -->
+        <div class="card bg-white p-6 rounded-xl border border-indigo-100 mb-6">
+            <div class="flex flex-col md:flex-row justify-between items-center gap-6">
+                
+                <div class="flex items-center gap-4">
+                    <div class="relative inline-block w-12 mr-2 align-middle select-none transition duration-200 ease-in">
+                        <input type="checkbox" name="toggle" id="power-switch" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer border-gray-300 transition-all duration-300 left-0"/>
+                        <label for="power-switch" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer transition-colors duration-300"></label>
+                    </div>
+                    <span class="font-bold text-gray-700">App Power</span>
+                    <div class="flex items-center gap-2 ml-4 px-3 py-1 rounded-full bg-gray-50 border border-gray-200">
+                        <span class="text-xs font-semibold text-gray-500 uppercase">Status</span>
+                        <div id="status-led" class="w-4 h-4 rounded-full bg-gray-300 transition-all duration-300"></div>
+                    </div>
+                </div>
+
+                <div id="connection-buttons" class="flex gap-3 opacity-50 pointer-events-none transition-opacity duration-300">
+                    <button id="btn-usb" class="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition">USB</button>
+                    <button id="btn-ble" class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition">BLE</button>
+                </div>
             </div>
-            <span class="font-bold text-gray-700">App Power</span>
-            <div
-              class="flex items-center gap-2 ml-4 px-3 py-1 rounded-full bg-gray-50 border border-gray-200"
-            >
-              <span class="text-xs font-semibold text-gray-500 uppercase"
-                >Status</span
-              >
-              <div
-                id="status-led"
-                class="w-4 h-4 rounded-full bg-gray-300 transition-all duration-300"
-              ></div>
+        </div>
+
+        <!-- Data Grid -->
+        <div id="data-display" class="grid grid-cols-1 sm:grid-cols-4 gap-6 mb-8">
+            <!-- Voltage Card -->
+            <div class="card bg-white p-6 rounded-xl border border-blue-200 col-span-2 relative overflow-hidden">
+                <div class="flex justify-between items-start mb-2">
+                    <p class="text-sm font-medium text-gray-500">Sensor Voltage</p>
+                    <!-- Sensor Toggle -->
+                    <div class="flex items-center gap-2 z-10">
+                        <span class="text-xs text-gray-400">Sensor Active</span>
+                        <div class="relative inline-block w-8 align-middle select-none">
+                            <input type="checkbox" id="sensor-toggle" checked class="toggle-checkbox absolute block w-4 h-4 rounded-full bg-white border-4 appearance-none cursor-pointer border-gray-300 left-0 transition-all duration-300"/>
+                            <label for="sensor-toggle" class="toggle-label block overflow-hidden h-4 rounded-full bg-gray-300 cursor-pointer transition-colors duration-300"></label>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex items-baseline gap-2">
+                    <p id="current-voltage" class="text-4xl font-bold text-blue-600 mt-1">-- V</p>
+                    <p id="current-raw" class="text-sm text-gray-400 font-mono">(Raw: ----)</p>
+                </div>
             </div>
-          </div>
 
-          <div
-            id="connection-buttons"
-            class="flex gap-3 opacity-50 pointer-events-none transition-opacity duration-300"
-          >
-            <button
-              id="btn-usb"
-              class="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition"
-            >
-              USB
-            </button>
-            <button
-              id="btn-ble"
-              class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition"
-            >
-              BLE
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Data Grid -->
-      <div id="data-display" class="grid grid-cols-1 sm:grid-cols-4 gap-6 mb-8">
-        <!-- Voltage Card -->
-        <div
-          class="card bg-white p-6 rounded-xl border border-blue-200 col-span-2"
-        >
-          <p class="text-sm font-medium text-gray-500">Sensor Voltage</p>
-          <div class="flex items-baseline gap-2">
-            <p
-              id="current-voltage"
-              class="text-4xl font-bold text-blue-600 mt-1"
-            >
-              -- V
-            </p>
-            <p id="current-raw" class="text-sm text-gray-400 font-mono">
-              (Raw: ----)
-            </p>
-          </div>
-        </div>
-
-        <!-- Battery Card -->
-        <div class="card bg-white p-6 rounded-xl border border-orange-100">
-          <p class="text-sm font-medium text-gray-500">Battery</p>
-          <div class="flex items-center gap-3 mt-2">
-            <!-- Battery Icon -->
-            <div
-              class="relative w-8 h-12 border-2 border-gray-700 rounded-md p-1 flex items-end justify-center"
-            >
-              <div
-                class="absolute -top-1.5 w-4 h-2 bg-gray-700 rounded-t-sm"
-              ></div>
-              <div
-                id="bat-fill"
-                class="w-full bg-green-500 rounded-sm transition-all duration-500"
-                style="height: 0%"
-              ></div>
-              <!-- Lightning Bolt (Charging) -->
-              <svg
-                id="charge-icon"
-                class="absolute w-6 h-6 text-yellow-400 drop-shadow-md hidden z-10 top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"
-                fill="currentColor"
-                viewBox="0 0 20 20"
-              >
-                <path
-                  fill-rule="evenodd"
-                  d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z"
-                  clip-rule="evenodd"
-                ></path>
-              </svg>
+            <!-- Battery Card -->
+            <div class="card bg-white p-6 rounded-xl border border-orange-100">
+                <p class="text-sm font-medium text-gray-500">Battery</p>
+                <div class="flex items-center gap-3 mt-2">
+                    <!-- Battery Icon -->
+                    <div class="relative w-8 h-12 border-2 border-gray-700 rounded-md p-1 flex items-end justify-center">
+                        <div class="absolute -top-1.5 w-4 h-2 bg-gray-700 rounded-t-sm"></div>
+                        <div id="bat-fill" class="w-full bg-green-500 rounded-sm transition-all duration-500" style="height: 0%"></div>
+                        <!-- Lightning Bolt (Charging) -->
+                        <svg id="charge-icon" class="absolute w-6 h-6 text-yellow-400 drop-shadow-md hidden z-10 top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clip-rule="evenodd"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <p id="bat-pct" class="text-2xl font-bold text-gray-800">--%</p>
+                        <p id="bat-volts" class="text-xs text-gray-500">-- V</p>
+                    </div>
+                </div>
             </div>
-            <div>
-              <p id="bat-pct" class="text-2xl font-bold text-gray-800">--%</p>
-              <p id="bat-volts" class="text-xs text-gray-500">-- V</p>
+
+            <!-- Status Card -->
+            <div class="card bg-white p-6 rounded-xl border border-green-200">
+                <p class="text-sm font-medium text-gray-500">Connection</p>
+                <p id="status-message" class="text-sm font-bold text-gray-400 mt-3">Idle</p>
             </div>
-          </div>
         </div>
 
-        <!-- Status Card -->
-        <div class="card bg-white p-6 rounded-xl border border-green-200">
-          <p class="text-sm font-medium text-gray-500">Connection</p>
-          <p id="status-message" class="text-sm font-bold text-gray-400 mt-3">
-            Idle
-          </p>
+        <!-- Chart -->
+        <div class="card bg-white p-6 rounded-xl">
+            <h2 class="text-xl font-semibold text-gray-700 mb-4">Live Trend</h2>
+            <div class="h-64 mb-6">
+                <canvas id="voltageChart"></canvas>
+            </div>
+            <button id="export-csv-btn" class="px-6 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50" disabled>Export CSV</button>
         </div>
-      </div>
-
-      <!-- Chart -->
-      <div class="card bg-white p-6 rounded-xl">
-        <h2 class="text-xl font-semibold text-gray-700 mb-4">Live Trend</h2>
-        <div class="h-64 mb-6">
-          <canvas id="voltageChart"></canvas>
+        
+        <div id="error-box" class="hidden mt-4 p-4 bg-red-100 border-l-4 border-red-500 text-red-700 rounded-md">
+            <p class="font-bold">Error</p>
+            <p id="error-message"></p>
         </div>
-        <button
-          id="export-csv-btn"
-          class="px-6 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50"
-          disabled
-        >
-          Export CSV
-        </button>
-      </div>
-
-      <div
-        id="error-box"
-        class="hidden mt-4 p-4 bg-red-100 border-l-4 border-red-500 text-red-700 rounded-md"
-      >
-        <p class="font-bold">Error</p>
-        <p id="error-message"></p>
-      </div>
     </div>
 
     <script type="module">
-      // BLE Settings
-      const SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
-      const CHARACTERISTIC_UUID_RX = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
+        // BLE Settings
+        const SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e"; 
+        const CHARACTERISTIC_UUID_RX = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"; // Notification
+        const CHARACTERISTIC_UUID_TX = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"; // Write (Command)
 
-      // DOM Elements
-      const STATUS_EL = document.getElementById("status-message");
-      const VOLTAGE_EL = document.getElementById("current-voltage");
-      const RAW_EL = document.getElementById("current-raw");
-      const BAT_PCT_EL = document.getElementById("bat-pct");
-      const BAT_VOLTS_EL = document.getElementById("bat-volts");
-      const BAT_FILL = document.getElementById("bat-fill");
-      const CHARGE_ICON = document.getElementById("charge-icon");
-      const EXPORT_BTN = document.getElementById("export-csv-btn");
-      const ERROR_BOX = document.getElementById("error-box");
-      const ERROR_MSG = document.getElementById("error-message");
-      const BTN_USB = document.getElementById("btn-usb");
-      const BTN_BLE = document.getElementById("btn-ble");
-      const POWER_SWITCH = document.getElementById("power-switch");
-      const STATUS_LED = document.getElementById("status-led");
-      const CONN_BTNS = document.getElementById("connection-buttons");
+        // DOM Elements
+        const STATUS_EL = document.getElementById('status-message');
+        const VOLTAGE_EL = document.getElementById('current-voltage');
+        const RAW_EL = document.getElementById('current-raw');
+        const BAT_PCT_EL = document.getElementById('bat-pct');
+        const BAT_VOLTS_EL = document.getElementById('bat-volts');
+        const BAT_FILL = document.getElementById('bat-fill');
+        const CHARGE_ICON = document.getElementById('charge-icon');
+        const EXPORT_BTN = document.getElementById('export-csv-btn');
+        const ERROR_BOX = document.getElementById('error-box');
+        const ERROR_MSG = document.getElementById('error-message');
+        const BTN_USB = document.getElementById('btn-usb');
+        const BTN_BLE = document.getElementById('btn-ble');
+        const POWER_SWITCH = document.getElementById('power-switch');
+        const SENSOR_SWITCH = document.getElementById('sensor-toggle');
+        const STATUS_LED = document.getElementById('status-led');
+        const CONN_BTNS = document.getElementById('connection-buttons');
 
-      let chartInstance,
-        dataHistory = [],
-        port,
-        reader,
-        bluetoothDevice,
-        gattServer;
+        let chartInstance, dataHistory = [], port, reader, writer, bluetoothDevice, gattServer, txChar;
 
-      function displayError(msg) {
-        ERROR_MSG.textContent = msg;
-        ERROR_BOX.classList.remove("hidden");
-        setTimeout(() => ERROR_BOX.classList.add("hidden"), 5000);
-      }
-
-      function setLedState(state) {
-        STATUS_LED.className =
-          "w-4 h-4 rounded-full transition-all duration-300 ";
-        if (state === "off") STATUS_LED.classList.add("bg-gray-300");
-        else if (state === "standby")
-          STATUS_LED.classList.add("bg-red-500", "led-glow-red");
-        else if (state === "active")
-          STATUS_LED.classList.add("bg-green-500", "led-glow-green");
-      }
-
-      function handlePowerToggle() {
-        if (POWER_SWITCH.checked) {
-          CONN_BTNS.classList.remove("opacity-50", "pointer-events-none");
-          setLedState("standby");
-          STATUS_EL.textContent = "Ready to connect";
-        } else {
-          disconnectHardware();
-          CONN_BTNS.classList.add("opacity-50", "pointer-events-none");
-          setLedState("off");
-          STATUS_EL.textContent = "Power Off";
-          resetData();
+        function displayError(msg) {
+            ERROR_MSG.textContent = msg;
+            ERROR_BOX.classList.remove('hidden');
+            setTimeout(() => ERROR_BOX.classList.add('hidden'), 5000);
         }
-      }
 
-      function resetData() {
-        VOLTAGE_EL.textContent = "-- V";
-        RAW_EL.textContent = "(Raw: ----)";
-        BAT_PCT_EL.textContent = "--%";
-        BAT_VOLTS_EL.textContent = "-- V";
-        BAT_FILL.style.height = "0%";
-        CHARGE_ICON.classList.add("hidden");
-      }
-
-      async function disconnectHardware() {
-        if (gattServer?.connected) bluetoothDevice.gatt.disconnect();
-        if (reader) {
-          await reader.cancel();
-          reader = null;
+        function setLedState(state) {
+            STATUS_LED.className = "w-4 h-4 rounded-full transition-all duration-300 ";
+            if (state === 'off') STATUS_LED.classList.add('bg-gray-300');
+            else if (state === 'standby') STATUS_LED.classList.add('bg-red-500', 'led-glow-red');
+            else if (state === 'active') STATUS_LED.classList.add('bg-green-500', 'led-glow-green');
         }
-        if (port) {
-          await port.close();
-          port = null;
-        }
-      }
 
-      function initChart() {
-        const ctx = document.getElementById("voltageChart").getContext("2d");
-        chartInstance = new Chart(ctx, {
-          type: "line",
-          data: {
-            labels: [],
-            datasets: [
-              {
-                label: "Voltage",
-                data: [],
-                borderColor: "#2563EB",
-                fill: true,
-              },
-            ],
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: { y: { min: 0, max: 1.3 } },
-            plugins: { legend: { display: false } },
-          },
-        });
-      }
-
-      function updateBatteryUI(pct, volts, isCharging) {
-        BAT_PCT_EL.textContent = `${pct}%`;
-        BAT_VOLTS_EL.textContent = `${volts.toFixed(2)} V`;
-        BAT_FILL.style.height = `${pct}%`;
-
-        // Color Logic
-        BAT_FILL.classList.remove(
-          "bg-red-500",
-          "bg-yellow-500",
-          "bg-green-500"
-        );
-        if (pct < 20) BAT_FILL.classList.add("bg-red-500");
-        else if (pct < 50) BAT_FILL.classList.add("bg-yellow-500");
-        else BAT_FILL.classList.add("bg-green-500");
-
-        // Charging Logic
-        if (isCharging) {
-          CHARGE_ICON.classList.remove("hidden");
-          CHARGE_ICON.classList.add("charging-anim");
-        } else {
-          CHARGE_ICON.classList.add("hidden");
-          CHARGE_ICON.classList.remove("charging-anim");
-        }
-      }
-
-      function processData(line) {
-        if (!POWER_SWITCH.checked) return;
-        try {
-          const d = JSON.parse(line);
-          if (d.voltage !== undefined) {
-            const timestamp = new Date();
-            const label = timestamp.toLocaleTimeString();
-
-            // Update UI
-            VOLTAGE_EL.textContent = `${d.voltage.toFixed(4)} V`;
-            RAW_EL.textContent = `(Raw: ${d.raw})`;
-
-            if (d.bat_pct !== undefined)
-              updateBatteryUI(d.bat_pct, d.bat_v, d.charging);
-
-            // Update Chart
-            if (chartInstance.data.labels.length > 50) {
-              chartInstance.data.labels.shift();
-              chartInstance.data.datasets[0].data.shift();
+        function handlePowerToggle() {
+            if (POWER_SWITCH.checked) {
+                CONN_BTNS.classList.remove('opacity-50', 'pointer-events-none');
+                setLedState('standby');
+                STATUS_EL.textContent = "Ready to connect";
+            } else {
+                disconnectHardware();
+                CONN_BTNS.classList.add('opacity-50', 'pointer-events-none');
+                setLedState('off');
+                STATUS_EL.textContent = "Power Off";
+                resetData();
             }
-            chartInstance.data.labels.push(label);
-            chartInstance.data.datasets[0].data.push(d.voltage);
-            chartInstance.update("none");
-
-            dataHistory.push({ time: timestamp.toISOString(), ...d });
-            EXPORT_BTN.disabled = false;
-          }
-        } catch (e) {}
-      }
-
-      async function connectUSB() {
-        if (!navigator.serial) return displayError("Use Chrome/Edge for USB");
-        try {
-          port = await navigator.serial.requestPort();
-          await port.open({ baudRate: 115200 });
-          setLedState("active");
-          STATUS_EL.textContent = "Connected (USB)";
-
-          const decoder = new TextDecoderStream();
-          const closed = port.readable.pipeTo(decoder.writable);
-          reader = decoder.readable.getReader();
-          let buffer = "";
-
-          while (true) {
-            const { value, done } = await reader.read();
-            if (done) break;
-            buffer += value;
-            const lines = buffer.split("\n");
-            buffer = lines.pop();
-            lines.forEach(processData);
-          }
-        } catch (err) {
-          displayError(err);
-          handlePowerToggle();
         }
-      }
-
-      async function connectBLE() {
-        if (!navigator.bluetooth)
-          return displayError("Use Chrome/Edge for BLE");
-        try {
-          bluetoothDevice = await navigator.bluetooth.requestDevice({
-            filters: [{ name: "ESP32_Sweat_Sensor" }],
-            optionalServices: [SERVICE_UUID],
-          });
-          gattServer = await bluetoothDevice.gatt.connect();
-          const service = await gattServer.getPrimaryService(SERVICE_UUID);
-          const char = await service.getCharacteristic(CHARACTERISTIC_UUID_RX);
-          await char.startNotifications();
-          char.addEventListener("characteristicvaluechanged", (e) => {
-            processData(new TextDecoder("utf-8").decode(e.target.value));
-          });
-          bluetoothDevice.addEventListener("gattserverdisconnected", () => {
-            handlePowerToggle(); // Reset state
-          });
-          setLedState("active");
-          STATUS_EL.textContent = "Connected (BLE)";
-        } catch (err) {
-          displayError(err);
+        
+        async function sendCommand(cmd) {
+            if (!POWER_SWITCH.checked) return;
+            console.log("Sending Command:", cmd);
+            
+            try {
+                // USB Send
+                if (writer) {
+                    await writer.write(cmd + "\n");
+                }
+                // BLE Send
+                if (txChar) {
+                    const encoder = new TextEncoder();
+                    await txChar.writeValue(encoder.encode(cmd));
+                }
+            } catch (e) {
+                console.warn("Failed to send command", e);
+            }
         }
-      }
 
-      function exportCSV() {
-        if (!dataHistory.length) return;
-        const csv = [
-          "Timestamp,Raw,Voltage,Bat_V,Bat_Pct,Charging",
-          ...dataHistory.map(
-            (d) =>
-              `${d.time},${d.raw},${d.voltage},${d.bat_v},${d.bat_pct},${d.charging}`
-          ),
-        ].join("\n");
-        const link = document.createElement("a");
-        link.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
-        link.download = "sensor_data.csv";
-        link.click();
-      }
+        // Handle Sensor Toggle Logic
+        SENSOR_SWITCH.addEventListener('change', () => {
+            if (SENSOR_SWITCH.checked) {
+                VOLTAGE_EL.classList.remove('text-gray-400');
+                VOLTAGE_EL.classList.add('text-blue-600');
+                sendCommand("SENSOR:1");
+            } else {
+                VOLTAGE_EL.textContent = "Paused";
+                RAW_EL.textContent = "(Sensor Off)";
+                VOLTAGE_EL.classList.remove('text-blue-600');
+                VOLTAGE_EL.classList.add('text-gray-400');
+                sendCommand("SENSOR:0");
+            }
+        });
 
-      document.addEventListener("DOMContentLoaded", () => {
-        initChart();
-        POWER_SWITCH.checked = false;
-        handlePowerToggle();
-        POWER_SWITCH.addEventListener("change", handlePowerToggle);
-        BTN_USB.addEventListener("click", connectUSB);
-        BTN_BLE.addEventListener("click", connectBLE);
-        EXPORT_BTN.addEventListener("click", exportCSV);
-      });
+        function resetData() {
+            VOLTAGE_EL.textContent = "-- V";
+            RAW_EL.textContent = "(Raw: ----)";
+            BAT_PCT_EL.textContent = "--%";
+            BAT_VOLTS_EL.textContent = "-- V";
+            BAT_FILL.style.height = "0%";
+            CHARGE_ICON.classList.add('hidden');
+        }
+
+        async function disconnectHardware() {
+            if (gattServer?.connected) bluetoothDevice.gatt.disconnect();
+            if (reader) { await reader.cancel(); reader = null; }
+            if (writer) { await writer.close(); writer = null; }
+            if (port) { await port.close(); port = null; }
+            txChar = null;
+        }
+
+        function initChart() {
+            const ctx = document.getElementById('voltageChart').getContext('2d');
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: { labels: [], datasets: [{ label: 'Voltage', data: [], borderColor: '#2563EB', fill: true }] },
+                options: { responsive: true, maintainAspectRatio: false, scales: { y: { min: 0, max: 1.3 } }, plugins: { legend: { display: false } } }
+            });
+        }
+
+        function updateBatteryUI(pct, volts, isCharging) {
+            BAT_PCT_EL.textContent = `${pct}%`;
+            BAT_VOLTS_EL.textContent = `${volts.toFixed(2)} V`;
+            BAT_FILL.style.height = `${pct}%`;
+            
+            // Color Logic
+            BAT_FILL.classList.remove('bg-red-500', 'bg-yellow-500', 'bg-green-500');
+            if(pct < 20) BAT_FILL.classList.add('bg-red-500');
+            else if(pct < 50) BAT_FILL.classList.add('bg-yellow-500');
+            else BAT_FILL.classList.add('bg-green-500');
+
+            // Charging Logic
+            if(isCharging) {
+                CHARGE_ICON.classList.remove('hidden');
+                CHARGE_ICON.classList.add('charging-anim');
+            } else {
+                CHARGE_ICON.classList.add('hidden');
+                CHARGE_ICON.classList.remove('charging-anim');
+            }
+        }
+
+        function processData(line) {
+            if (!POWER_SWITCH.checked) return;
+            try {
+                const d = JSON.parse(line);
+                
+                // Always update battery if available
+                if(d.bat_pct !== undefined) updateBatteryUI(d.bat_pct, d.bat_v, d.charging);
+
+                // Only update Voltage/Chart if sensor is enabled in UI
+                if (SENSOR_SWITCH.checked && d.voltage !== undefined) {
+                    const timestamp = new Date();
+                    const label = timestamp.toLocaleTimeString();
+
+                    VOLTAGE_EL.textContent = `${d.voltage.toFixed(4)} V`;
+                    RAW_EL.textContent = `(Raw: ${d.raw})`;
+
+                    if (chartInstance.data.labels.length > 50) {
+                        chartInstance.data.labels.shift();
+                        chartInstance.data.datasets[0].data.shift();
+                    }
+                    chartInstance.data.labels.push(label);
+                    chartInstance.data.datasets[0].data.push(d.voltage);
+                    chartInstance.update('none');
+
+                    dataHistory.push({ time: timestamp.toISOString(), ...d });
+                    EXPORT_BTN.disabled = false;
+                }
+            } catch (e) { }
+        }
+
+        async function connectUSB() {
+            if (!navigator.serial) return displayError("Use Chrome/Edge for USB");
+            try {
+                port = await navigator.serial.requestPort();
+                await port.open({ baudRate: 115200 });
+                setLedState('active');
+                STATUS_EL.textContent = "Connected (USB)";
+                
+                // Setup Writer (for commands)
+                const textEncoder = new TextEncoderStream();
+                const writableStreamClosed = textEncoder.readable.pipeTo(port.writable);
+                writer = textEncoder.writable.getWriter();
+
+                // Setup Reader
+                const decoder = new TextDecoderStream();
+                const closed = port.readable.pipeTo(decoder.writable);
+                reader = decoder.readable.getReader();
+                let buffer = "";
+
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    buffer += value;
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop();
+                    lines.forEach(processData);
+                }
+            } catch (err) { displayError(err); handlePowerToggle(); }
+        }
+
+        async function connectBLE() {
+            if (!navigator.bluetooth) return displayError("Use Chrome/Edge for BLE");
+            try {
+                bluetoothDevice = await navigator.bluetooth.requestDevice({
+                    filters: [{ name: 'ESP32_Sweat_Sensor' }], optionalServices: [SERVICE_UUID]
+                });
+                gattServer = await bluetoothDevice.gatt.connect();
+                const service = await gattServer.getPrimaryService(SERVICE_UUID);
+                
+                // Get RX (Notification) Char
+                const rxChar = await service.getCharacteristic(CHARACTERISTIC_UUID_RX);
+                await rxChar.startNotifications();
+                rxChar.addEventListener('characteristicvaluechanged', (e) => {
+                    processData(new TextDecoder('utf-8').decode(e.target.value));
+                });
+                
+                // Get TX (Write) Char if available
+                try {
+                    txChar = await service.getCharacteristic(CHARACTERISTIC_UUID_TX);
+                } catch(e) { console.log("TX Char not found (Old firmware?)"); }
+
+                bluetoothDevice.addEventListener('gattserverdisconnected', () => {
+                    handlePowerToggle(); // Reset state
+                });
+                setLedState('active');
+                STATUS_EL.textContent = "Connected (BLE)";
+            } catch (err) { displayError(err); }
+        }
+
+        function exportCSV() {
+            if (!dataHistory.length) return;
+            const csv = ['Timestamp,Raw,Voltage,Bat_V,Bat_Pct,Charging', 
+                ...dataHistory.map(d => `${d.time},${d.raw},${d.voltage},${d.bat_v},${d.bat_pct},${d.charging}`)
+            ].join('\n');
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+            link.download = 'sensor_data.csv';
+            link.click();
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initChart();
+            POWER_SWITCH.checked = false; handlePowerToggle();
+            POWER_SWITCH.addEventListener('change', handlePowerToggle);
+            BTN_USB.addEventListener('click', connectUSB);
+            BTN_BLE.addEventListener('click', connectBLE);
+            EXPORT_BTN.addEventListener('click', exportCSV);
+        });
     </script>
-  </body>
+</body>
 </html>
