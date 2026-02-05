@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Smart Shirt Studio</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+      body {
+        font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+        background-color: #f4f6f8;
+        color: #333;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 40px;
+      }
+      .card {
+        background-color: #ffffff;
+        padding: 30px;
+        border-radius: 12px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        text-align: center;
+        width: 100%;
+        max-width: 500px;
+        margin-bottom: 30px;
+      }
+      .temp-display {
+        font-size: 5rem;
+        font-weight: 700;
+        color: #27ae60;
+        margin: 10px 0;
+      }
+      .unit {
+        font-size: 2rem;
+        color: #7f8c8d;
+        font-weight: 400;
+      }
+      .status {
+        font-weight: bold;
+        color: #e74c3c;
+        margin-bottom: 20px;
+        text-transform: uppercase;
+      }
+      .btn-group {
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+        margin-top: 10px;
+        flex-wrap: wrap;
+      }
+      button {
+        padding: 12px 24px;
+        font-weight: 600;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        color: white;
+      }
+      .btn-usb {
+        background-color: #3498db;
+      }
+      .btn-ble {
+        background-color: #9b59b6;
+      }
+      .btn-csv {
+        background-color: #f39c12;
+      }
+      .btn-img {
+        background-color: #34495e;
+      }
+      .chart-container {
+        width: 100%;
+        max-width: 900px;
+        background-color: #ffffff;
+        padding: 20px;
+        border-radius: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Smart Shirt Studio</h1>
+
+    <div class="card">
+      <div class="status" id="statusText">Disconnected</div>
+      <div>Average Shirt Temperature</div>
+      <div class="temp-display">
+        <span id="tempValue">--.-</span><span class="unit">°C</span>
+      </div>
+      <p style="color: #7f8c8d">
+        Reference Room Temp: <strong id="refValue">--</strong> °C
+      </p>
+
+      <div class="btn-group">
+        <button id="btnUsb" class="btn-usb">🔌 Connect USB</button>
+        <button id="btnBle" class="btn-ble">🔵 Connect Bluetooth</button>
+      </div>
+      <div class="btn-group" style="margin-top: 15px">
+        <button id="btnCsv" class="btn-csv">💾 Save CSV</button>
+        <button id="btnImg" class="btn-img">📷 Save Plot</button>
+      </div>
+    </div>
+
+    <div class="chart-container">
+      <canvas id="tempChart"></canvas>
+    </div>
+
+    <script>
+      const SMOOTHING_WINDOW = 50;
+
+      // --- VARIABLES ---
+      let port, reader;
+      let bluetoothDevice, bleCharacteristic;
+      let shirtReadings = [];
+      let dataHistory = [];
+      let chart;
+
+      // --- UUIDS (MUST MATCH ARDUINO EXACTLY) ---
+      const SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+      const CHAR_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
+
+      // --- CHART SETUP ---
+      const ctx = document.getElementById("tempChart").getContext("2d");
+      const whiteBackgroundPlugin = {
+        id: "customCanvasBackgroundColor",
+        beforeDraw: (chart) => {
+          const ctx = chart.canvas.getContext("2d");
+          ctx.save();
+          ctx.globalCompositeOperation = "destination-over";
+          ctx.fillStyle = "white";
+          ctx.fillRect(0, 0, chart.width, chart.height);
+          ctx.restore();
+        },
+      };
+
+      chart = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels: Array(50).fill(""),
+          datasets: [
+            {
+              label: "Shirt Temperature",
+              borderColor: "#27ae60",
+              backgroundColor: "rgba(39, 174, 96, 0.1)",
+              borderWidth: 2,
+              data: Array(50).fill(null),
+              tension: 0.4,
+              fill: true,
+              pointRadius: 0,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          animation: false,
+          scales: { y: { suggestedMin: 20, suggestedMax: 40 } },
+        },
+        plugins: [whiteBackgroundPlugin],
+      });
+
+      // --- BUTTONS ---
+      document.getElementById("btnUsb").addEventListener("click", connectUSB);
+      document.getElementById("btnBle").addEventListener("click", connectBLE);
+      document.getElementById("btnCsv").addEventListener("click", downloadCSV);
+      document.getElementById("btnImg").addEventListener("click", downloadPlot);
+
+      // --- BLUETOOTH CONNECTION ---
+      async function connectBLE() {
+        if (!navigator.bluetooth) {
+          alert("Web Bluetooth not supported.");
+          return;
+        }
+        try {
+          console.log("Requesting Bluetooth Device...");
+          bluetoothDevice = await navigator.bluetooth.requestDevice({
+            // We search by Service UUID because names can be cached/wrong
+            filters: [{ services: [SERVICE_UUID] }],
+          });
+
+          updateStatus("Connecting...", "#f39c12");
+          const server = await bluetoothDevice.gatt.connect();
+          console.log("Connected to GATT Server");
+
+          const service = await server.getPrimaryService(SERVICE_UUID);
+          console.log("Service found");
+
+          bleCharacteristic = await service.getCharacteristic(CHAR_UUID);
+          console.log("Characteristic found");
+
+          await bleCharacteristic.startNotifications();
+          bleCharacteristic.addEventListener(
+            "characteristicvaluechanged",
+            handleBLEData
+          );
+
+          updateStatus("Bluetooth Connected", "#9b59b6");
+          console.log("Notifications started");
+
+          bluetoothDevice.addEventListener("gattserverdisconnected", () => {
+            updateStatus("Disconnected", "#e74c3c");
+          });
+        } catch (error) {
+          console.error("BLE Error:", error);
+          if (!error.toString().includes("User cancelled")) {
+            alert("BLE Connection Failed: " + error);
+          }
+        }
+      }
+
+      function handleBLEData(event) {
+        const value = event.target.value;
+        const decoder = new TextDecoder("utf-8");
+        const line = decoder.decode(value);
+        // console.log("Received:", line); // Uncomment to debug raw data
+        processLine(line);
+      }
+
+      // --- USB CONNECTION ---
+      async function connectUSB() {
+        if ("serial" in navigator) {
+          try {
+            port = await navigator.serial.requestPort();
+            await port.open({ baudRate: 115200 });
+            updateStatus("USB Connected", "#3498db");
+            readLoopUSB();
+          } catch (err) {
+            alert("USB Error: " + err);
+          }
+        } else {
+          alert("Web Serial not supported.");
+        }
+      }
+
+      async function readLoopUSB() {
+        const textDecoder = new TextDecoderStream();
+        const readableStreamClosed = port.readable.pipeTo(textDecoder.writable);
+        reader = textDecoder.readable.getReader();
+        let buffer = "";
+        try {
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buffer += value;
+            let lines = buffer.split("\n");
+            buffer = lines.pop();
+            for (const line of lines) processLine(line);
+          }
+        } catch (error) {
+          console.error(error);
+        }
+      }
+
+      // --- DATA PROCESSING ---
+      function processLine(line) {
+        const regex = /Ref\(Room\):\s*([\d\.]+)\s*\|\s*Shirt:\s*([\d\.]+)/;
+        const match = line.match(regex);
+
+        if (match) {
+          const refTemp = parseFloat(match[1]);
+          let rawShirtTemp = parseFloat(match[2]);
+
+          shirtReadings.push(rawShirtTemp);
+          if (shirtReadings.length > SMOOTHING_WINDOW) shirtReadings.shift();
+
+          const sum = shirtReadings.reduce((a, b) => a + b, 0);
+          const avgShirtTemp = (sum / shirtReadings.length).toFixed(1);
+
+          dataHistory.push({
+            time: new Date().toLocaleTimeString(),
+            room: refTemp,
+            shirt: avgShirtTemp,
+          });
+          updateUI(refTemp, avgShirtTemp);
+        }
+      }
+
+      function updateUI(ref, avgShirt) {
+        document.getElementById("tempValue").innerText = avgShirt;
+        document.getElementById("refValue").innerText = ref;
+        chart.data.datasets[0].data.push(avgShirt);
+        if (chart.data.datasets[0].data.length > 50)
+          chart.data.datasets[0].data.shift();
+        chart.update();
+      }
+
+      function updateStatus(msg, color) {
+        const el = document.getElementById("statusText");
+        el.innerText = msg;
+        el.style.color = color;
+      }
+
+      function downloadCSV() {
+        let csvContent =
+          "data:text/csv;charset=utf-8,Time,Room Temp,Shirt Temp\n";
+        dataHistory.forEach((row) => {
+          csvContent += `${row.time},${row.room},${row.shirt}\n`;
+        });
+        const link = document.createElement("a");
+        link.setAttribute("href", encodeURI(csvContent));
+        link.setAttribute("download", "shirt_data.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+
+      function downloadPlot() {
+        const link = document.createElement("a");
+        link.download = "shirt_plot.png";
+        link.href = document
+          .getElementById("tempChart")
+          .toDataURL("image/png", 1.0);
+        link.click();
+      }
+    </script>
+  </body>
+</html>
