@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Smart Insole Monitor (USB + BLE)</title>
+    <title>Smart Insole (Matched Colors)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
@@ -12,11 +12,10 @@
     <style>
       body {
         font-family: "Inter", sans-serif;
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
       }
+      /* Standard Sensor Style (Left Side) */
       .insole-zone {
-        transition: fill 0.05s linear;
+        transition: fill 0.1s ease; /* Smoother transition */
         stroke: #374151;
         stroke-width: 1.5;
         stroke-linejoin: round;
@@ -31,16 +30,39 @@
         dominant-baseline: middle;
         opacity: 0.7;
       }
+
+      /* Heatmap Style (Right Side) */
+      .heatmap-blob {
+        transition:
+          opacity 0.1s ease,
+          fill 0.1s ease;
+        mix-blend-mode: multiply; /* Helps colors blend */
+      }
+
+      /* CoP Marker */
+      #cop-marker {
+        transition:
+          cx 0.1s linear,
+          cy 0.1s linear,
+          opacity 0.2s;
+        pointer-events: none;
+        filter: drop-shadow(0px 0px 2px rgba(0, 0, 0, 0.5));
+      }
+
       .btn-disabled {
         opacity: 0.5;
         cursor: not-allowed;
-        pointer-events: none;
       }
-      /* Blink animation for recording indicator */
       @keyframes blink {
-        0% { opacity: 1; }
-        50% { opacity: 0.4; }
-        100% { opacity: 1; }
+        0% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.4;
+        }
+        100% {
+          opacity: 1;
+        }
       }
       .recording-dot {
         animation: blink 1.5s infinite;
@@ -50,61 +72,30 @@
   <body
     class="bg-gray-100 text-gray-800 flex items-center justify-center min-h-screen p-4"
   >
-    <div class="w-full max-w-5xl bg-white rounded-2xl shadow-xl p-6 md:p-8">
+    <div class="w-full max-w-7xl bg-white rounded-2xl shadow-xl p-6 md:p-8">
       <header class="text-center mb-8">
         <h1 class="text-3xl font-bold text-gray-900">Smart Insole Monitor</h1>
-        <p class="text-gray-500 mt-2">Dual Mode: USB Serial & Bluetooth LE</p>
+        <p class="text-gray-500 mt-2">Heatmap & Center of Pressure (CoP)</p>
       </header>
 
-      <main class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
+      <main class="grid grid-cols-1 xl:grid-cols-3 gap-8 items-start">
         <div class="flex flex-col space-y-6">
           <div class="bg-gray-50 border border-gray-200 p-6 rounded-xl">
             <h2 class="text-lg font-semibold mb-4 text-gray-700">Connection</h2>
-
             <div class="flex flex-col gap-3">
               <button
                 id="connect-usb-button"
                 class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-xl transition duration-200 shadow-sm flex items-center justify-center gap-2"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  class="h-6 w-6"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"
-                  />
-                </svg>
                 Connect USB Serial
               </button>
-
               <button
                 id="connect-ble-button"
                 class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl transition duration-200 shadow-sm flex items-center justify-center gap-2"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  class="h-6 w-6"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 008 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.2-2.858.59-4.18"
-                  />
-                </svg>
                 Connect Bluetooth
               </button>
             </div>
-
             <p
               id="status-display"
               class="mt-4 text-sm text-center text-gray-500 font-mono"
@@ -114,43 +105,33 @@
           </div>
 
           <div class="bg-gray-50 border border-gray-200 p-6 rounded-xl">
-             <div class="flex justify-between items-center mb-3">
-                <h2 class="text-lg font-semibold text-gray-700">Data Recording</h2>
-                <div id="recording-indicator" class="hidden flex items-center text-red-600 font-bold text-sm">
-                   <div class="w-3 h-3 bg-red-600 rounded-full mr-2 recording-dot"></div>
-                   REC
-                </div>
-             </div>
-             
-             <button
-               id="record-button"
-               class="w-full bg-gray-700 hover:bg-gray-800 text-white font-bold py-3 px-6 rounded-xl transition duration-200 shadow-sm flex items-center justify-center gap-2 btn-disabled"
-               disabled
-             >
-               <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-               </svg>
-               Start Recording CSV
-             </button>
-             <p id="record-status" class="mt-2 text-xs text-center text-gray-500">
-                0 samples collected
-             </p>
-          </div>
-
-          <div class="bg-gray-50 border border-gray-200 p-6 rounded-xl">
-            <h2 class="text-lg font-semibold mb-3 text-gray-700">
-              Pressure Intensity
-            </h2>
-            <div
-              class="w-full h-6 rounded-full bg-gradient-to-r from-green-400 via-yellow-400 to-red-600 shadow-inner"
-            ></div>
-            <div
-              class="flex justify-between text-xs mt-2 text-gray-500 font-medium"
-            >
-              <span>0 (Light)</span>
-              <span>128 (Medium)</span>
-              <span>255 (Heavy)</span>
+            <div class="flex justify-between items-center mb-3">
+              <h2 class="text-lg font-semibold text-gray-700">
+                Data Recording
+              </h2>
+              <div
+                id="recording-indicator"
+                class="hidden flex items-center text-red-600 font-bold text-sm"
+              >
+                <div
+                  class="w-3 h-3 bg-red-600 rounded-full mr-2 recording-dot"
+                ></div>
+                REC
+              </div>
             </div>
+            <button
+              id="record-button"
+              class="w-full bg-gray-700 hover:bg-gray-800 text-white font-bold py-3 px-6 rounded-xl transition duration-200 shadow-sm flex items-center justify-center gap-2 btn-disabled"
+              disabled
+            >
+              Start Recording CSV
+            </button>
+            <p
+              id="record-status"
+              class="mt-2 text-xs text-center text-gray-500"
+            >
+              0 samples collected
+            </p>
           </div>
 
           <div
@@ -159,33 +140,38 @@
             <div
               class="flex justify-between mb-2 border-b border-gray-700 pb-1"
             >
-              <span>RAW DATA STREAM</span>
+              <span>FORCE (N)</span>
             </div>
             <div
               id="raw-data-display"
-              class="grid grid-cols-8 gap-2 text-center"
+              class="grid grid-cols-4 gap-2 text-center"
             ></div>
+            <div
+              class="mt-2 pt-2 border-t border-gray-700 text-center text-gray-500"
+            >
+              CoP: X:<span id="cop-x">0</span> Y:<span id="cop-y">0</span>
+            </div>
           </div>
         </div>
 
-        <div
-          class="flex justify-center items-center bg-gray-50 rounded-2xl p-4 border border-gray-200"
-        >
-          <svg
-            width="350"
-            height="850"
-            viewBox="0 0 350 700"
-            xmlns="http://www.w3.org/2000/svg"
-            id="insole-svg"
+        <div class="flex flex-col items-center">
+          <h3 class="text-lg font-bold text-gray-700 mb-2">Sensor Layout</h3>
+          <div
+            class="flex justify-center items-center bg-gray-50 rounded-2xl p-4 border border-gray-200 shadow-inner"
           >
-            <g
-              id="insole-outline"
-              transform="translate(-90.000000,788.000000) scale(0.180000,-0.145000)"
-              stroke="none"
-              fill="#e5e7eb"
+            <svg
+              width="300"
+              height="800"
+              viewBox="0 0 350 700"
+              xmlns="http://www.w3.org/2000/svg"
             >
-              <path
-                d="M1524 5790 c-397 -85 -767 -664 -909 -1420 -15 -80 -38 -202 -51
+              <g
+                transform="translate(-90.000000,788.000000) scale(0.180000,-0.145000)"
+                stroke="none"
+                fill="#e5e7eb"
+              >
+                <path
+                  d="M1524 5790 c-397 -85 -767 -664 -909 -1420 -15 -80 -38 -202 -51
 -271 -41 -220 -57 -375 -57 -559 0 -197 17 -329 62 -485 56 -193 76 -363 91
 -748 13 -325 24 -459 60 -707 58 -395 71 -468 125 -714 66 -302 99 -382 201
 -484 125 -125 311 -183 478 -149 182 37 352 163 431 317 46 91 55 143 55 321
@@ -198,174 +184,373 @@
 462 -132 580 -92 577 -107 709 -121 1077 -16 415 -37 579 -108 853 -31 121
 -52 290 -52 428 0 113 26 347 56 510 14 76 34 187 44 247 91 518 288 972 534
 1232 118 125 220 193 346 229 65 19 212 12 279 -14z"
-              />
-            </g>
+                />
+              </g>
+              <g>
+                <ellipse
+                  id="zone-0"
+                  class="insole-zone"
+                  cx="255"
+                  cy="70"
+                  rx="42"
+                  ry="55"
+                  fill="#d1d5db"
+                />
+                <text x="255" y="70" class="insole-zone-text">0</text>
+                <ellipse
+                  id="zone-1"
+                  class="insole-zone"
+                  cx="175"
+                  cy="65"
+                  rx="28"
+                  ry="38"
+                  fill="#d1d5db"
+                />
+                <text x="175" y="65" class="insole-zone-text">1</text>
+                <ellipse
+                  id="zone-2"
+                  class="insole-zone"
+                  cx="115"
+                  cy="80"
+                  rx="25"
+                  ry="32"
+                  fill="#d1d5db"
+                />
+                <text x="115" y="80" class="insole-zone-text">2</text>
+                <circle
+                  id="zone-3"
+                  class="insole-zone"
+                  cx="65"
+                  cy="110"
+                  r="22"
+                  fill="#d1d5db"
+                />
+                <text x="65" y="110" class="insole-zone-text">3</text>
+                <circle
+                  id="zone-4"
+                  class="insole-zone"
+                  cx="285"
+                  cy="200"
+                  r="40"
+                  fill="#d1d5db"
+                />
+                <text x="285" y="200" class="insole-zone-text">4</text>
+                <circle
+                  id="zone-5"
+                  class="insole-zone"
+                  cx="205"
+                  cy="180"
+                  r="40"
+                  fill="#d1d5db"
+                />
+                <text x="205" y="180" class="insole-zone-text">5</text>
+                <circle
+                  id="zone-6"
+                  class="insole-zone"
+                  cx="125"
+                  cy="200"
+                  r="40"
+                  fill="#d1d5db"
+                />
+                <text x="125" y="200" class="insole-zone-text">6</text>
+                <circle
+                  id="zone-7"
+                  class="insole-zone"
+                  cx="60"
+                  cy="250"
+                  r="40"
+                  fill="#d1d5db"
+                />
+                <text x="60" y="250" class="insole-zone-text">7</text>
+                <circle
+                  id="zone-8"
+                  class="insole-zone"
+                  cx="60"
+                  cy="332"
+                  r="38"
+                  fill="#d1d5db"
+                />
+                <text x="60" y="332" class="insole-zone-text">8</text>
+                <circle
+                  id="zone-10"
+                  class="insole-zone"
+                  cx="70"
+                  cy="410"
+                  r="36"
+                  fill="#d1d5db"
+                />
+                <text x="70" y="410" class="insole-zone-text">9</text>
+                <circle
+                  id="zone-11"
+                  class="insole-zone"
+                  cx="90"
+                  cy="490"
+                  r="38"
+                  fill="#d1d5db"
+                />
+                <text x="90" y="490" class="insole-zone-text">10</text>
+                <circle
+                  id="zone-9"
+                  class="insole-zone"
+                  cx="190"
+                  cy="380"
+                  r="40"
+                  fill="#d1d5db"
+                />
+                <text x="190" y="380" class="insole-zone-text">11</text>
+                <circle
+                  id="zone-12"
+                  class="insole-zone"
+                  cx="155"
+                  cy="540"
+                  r="38"
+                  fill="#d1d5db"
+                />
+                <text x="155" y="540" class="insole-zone-text">12</text>
+                <circle
+                  id="zone-13"
+                  class="insole-zone"
+                  cx="210"
+                  cy="610"
+                  r="38"
+                  fill="#d1d5db"
+                />
+                <text x="210" y="610" class="insole-zone-text">13</text>
+                <circle
+                  id="zone-15"
+                  class="insole-zone"
+                  cx="105"
+                  cy="610"
+                  r="38"
+                  fill="#d1d5db"
+                />
+                <text x="105" y="610" class="insole-zone-text">15</text>
+                <circle
+                  id="zone-14"
+                  class="insole-zone"
+                  cx="160"
+                  cy="680"
+                  r="42"
+                  fill="#d1d5db"
+                />
+                <text x="160" y="680" class="insole-zone-text">14</text>
+              </g>
+            </svg>
+          </div>
+        </div>
 
-            <g transform="translate(0, 0)">
-              <ellipse
-                id="zone-0"
-                class="insole-zone"
-                cx="255"
-                cy="70"
-                rx="42"
-                ry="55"
-                fill="#d1d5db"
-              />
-              <text x="255" y="70" class="insole-zone-text">0</text>
+        <div class="flex flex-col items-center">
+          <h3 class="text-lg font-bold text-gray-700 mb-2">
+            Gradient Heatmap & CoP
+          </h3>
+          <div
+            class="flex justify-center items-center bg-gray-50 rounded-2xl p-4 border border-gray-200 shadow-inner"
+          >
+            <svg
+              width="300"
+              height="800"
+              viewBox="0 0 350 700"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <defs>
+                <filter
+                  id="heatmap-blur"
+                  x="-50%"
+                  y="-50%"
+                  width="200%"
+                  height="200%"
+                >
+                  <feGaussianBlur in="SourceGraphic" stdDeviation="25" />
+                </filter>
+                <clipPath id="insole-clip">
+                  <path
+                    transform="translate(-90.000000,788.000000) scale(0.180000,-0.145000)"
+                    d="M1524 5790 c-397 -85 -767 -664 -909 -1420 -15 -80 -38 -202 -51-271 -41 -220 -57 -375 -57 -559 0 -197 17 -329 62 -485 56 -193 76 -363 91-748 13 -325 24 -459 60 -707 58 -395 71 -468 125 -714 66 -302 99 -382 201-484 125 -125 311 -183 478 -149 182 37 352 163 431 317 46 91 55 143 55 3210 229 -22 397 -102 769 -50 236 -68 366 -68 510 0 310 56 502 229 777 149 236236 451 325 799 l46 182 0 203 c0 112 -5 256 -10 319 -63 694 -315 1201 -6551321 -67 23 -188 33 -251 19z m255 -38 c296 -115 522 -526 612 -1117 16 -10922 -204 26 -425 5 -283 5 -286 -22 -390 -108 -430 -178 -606 -353 -885 -143-229 -193 -374 -214 -629 -16 -190 -1 -345 61 -641 111 -522 136 -839 80-1012 -42 -129 -155 -257 -290 -328 -287 -151 -634 -18 -746 285 -21 56 -113462 -132 580 -92 577 -107 709 -121 1077 -16 415 -37 579 -108 853 -31 121-52 290 -52 428 0 113 26 347 56 510 14 76 34 187 44 247 91 518 288 972 5341232 118 125 220 193 346 229 65 19 212 12 279 -14z"
+                  />
+                </clipPath>
+              </defs>
 
-              <ellipse
-                id="zone-1"
-                class="insole-zone"
-                cx="175"
-                cy="65"
-                rx="28"
-                ry="38"
-                fill="#d1d5db"
-              />
-              <text x="175" y="65" class="insole-zone-text">1</text>
+              <g
+                transform="translate(-90.000000,788.000000) scale(0.180000,-0.145000)"
+                stroke="none"
+                fill="#e5e7eb"
+              >
+                <path
+                  d="M1524 5790 c-397 -85 -767 -664 -909 -1420 -15 -80 -38 -202 -51
+-271 -41 -220 -57 -375 -57 -559 0 -197 17 -329 62 -485 56 -193 76 -363 91
+-748 13 -325 24 -459 60 -707 58 -395 71 -468 125 -714 66 -302 99 -382 201
+-484 125 -125 311 -183 478 -149 182 37 352 163 431 317 46 91 55 143 55 321
+0 229 -22 397 -102 769 -50 236 -68 366 -68 510 0 310 56 502 229 777 149 236
+236 451 325 799 l46 182 0 203 c0 112 -5 256 -10 319 -63 694 -315 1201 -655
+1321 -67 23 -188 33 -251 19z m255 -38 c296 -115 522 -526 612 -1117 16 -109
+22 -204 26 -425 5 -283 5 -286 -22 -390 -108 -430 -178 -606 -353 -885 -143
+-229 -193 -374 -214 -629 -16 -190 -1 -345 61 -641 111 -522 136 -839 80
+-1012 -42 -129 -155 -257 -290 -328 -287 -151 -634 -18 -746 285 -21 56 -113
+462 -132 580 -92 577 -107 709 -121 1077 -16 415 -37 579 -108 853 -31 121
+-52 290 -52 428 0 113 26 347 56 510 14 76 34 187 44 247 91 518 288 972 534
+1232 118 125 220 193 346 229 65 19 212 12 279 -14z"
+                />
+              </g>
 
-              <ellipse
-                id="zone-2"
-                class="insole-zone"
-                cx="115"
-                cy="80"
-                rx="25"
-                ry="32"
-                fill="#d1d5db"
-              />
-              <text x="115" y="80" class="insole-zone-text">2</text>
+              <g clip-path="url(#insole-clip)" filter="url(#heatmap-blur)">
+                <circle
+                  id="heat-0"
+                  class="heatmap-blob"
+                  cx="255"
+                  cy="70"
+                  r="50"
+                  fill="transparent"
+                />
+                <circle
+                  id="heat-1"
+                  class="heatmap-blob"
+                  cx="175"
+                  cy="65"
+                  r="45"
+                  fill="transparent"
+                />
+                <circle
+                  id="heat-2"
+                  class="heatmap-blob"
+                  cx="115"
+                  cy="80"
+                  r="45"
+                  fill="transparent"
+                />
+                <circle
+                  id="heat-3"
+                  class="heatmap-blob"
+                  cx="65"
+                  cy="110"
+                  r="40"
+                  fill="transparent"
+                />
+                <circle
+                  id="heat-4"
+                  class="heatmap-blob"
+                  cx="285"
+                  cy="200"
+                  r="55"
+                  fill="transparent"
+                />
+                <circle
+                  id="heat-5"
+                  class="heatmap-blob"
+                  cx="205"
+                  cy="180"
+                  r="55"
+                  fill="transparent"
+                />
+                <circle
+                  id="heat-6"
+                  class="heatmap-blob"
+                  cx="125"
+                  cy="200"
+                  r="55"
+                  fill="transparent"
+                />
+                <circle
+                  id="heat-7"
+                  class="heatmap-blob"
+                  cx="60"
+                  cy="250"
+                  r="55"
+                  fill="transparent"
+                />
+                <circle
+                  id="heat-8"
+                  class="heatmap-blob"
+                  cx="60"
+                  cy="332"
+                  r="50"
+                  fill="transparent"
+                />
+                <circle
+                  id="heat-10"
+                  class="heatmap-blob"
+                  cx="70"
+                  cy="410"
+                  r="50"
+                  fill="transparent"
+                />
+                <circle
+                  id="heat-11"
+                  class="heatmap-blob"
+                  cx="90"
+                  cy="490"
+                  r="50"
+                  fill="transparent"
+                />
+                <circle
+                  id="heat-9"
+                  class="heatmap-blob"
+                  cx="190"
+                  cy="380"
+                  r="50"
+                  fill="transparent"
+                />
+                <circle
+                  id="heat-12"
+                  class="heatmap-blob"
+                  cx="155"
+                  cy="540"
+                  r="50"
+                  fill="transparent"
+                />
+                <circle
+                  id="heat-13"
+                  class="heatmap-blob"
+                  cx="210"
+                  cy="610"
+                  r="50"
+                  fill="transparent"
+                />
+                <circle
+                  id="heat-15"
+                  class="heatmap-blob"
+                  cx="105"
+                  cy="610"
+                  r="50"
+                  fill="transparent"
+                />
+                <circle
+                  id="heat-14"
+                  class="heatmap-blob"
+                  cx="160"
+                  cy="680"
+                  r="50"
+                  fill="transparent"
+                />
+              </g>
 
-              <circle
-                id="zone-3"
-                class="insole-zone"
-                cx="65"
-                cy="110"
-                r="22"
-                fill="#d1d5db"
-              />
-              <text x="65" y="110" class="insole-zone-text">3</text>
-
-              <circle
-                id="zone-4"
-                class="insole-zone"
-                cx="285"
-                cy="200"
-                r="40"
-                fill="#d1d5db"
-              />
-              <text x="285" y="200" class="insole-zone-text">4</text>
-
-              <circle
-                id="zone-5"
-                class="insole-zone"
-                cx="205"
-                cy="180"
-                r="40"
-                fill="#d1d5db"
-              />
-              <text x="205" y="180" class="insole-zone-text">5</text>
-
-              <circle
-                id="zone-6"
-                class="insole-zone"
-                cx="125"
-                cy="200"
-                r="40"
-                fill="#d1d5db"
-              />
-              <text x="125" y="200" class="insole-zone-text">6</text>
-
-              <circle
-                id="zone-7"
-                class="insole-zone"
-                cx="60"
-                cy="250"
-                r="40"
-                fill="#d1d5db"
-              />
-              <text x="60" y="250" class="insole-zone-text">7</text>
-
-              <circle
-                id="zone-8"
-                class="insole-zone"
-                cx="60"
-                cy="332"
-                r="38"
-                fill="#d1d5db"
-              />
-              <text x="60" y="332" class="insole-zone-text">8</text>
-
-              <circle
-                id="zone-10"
-                class="insole-zone"
-                cx="70"
-                cy="410"
-                r="36"
-                fill="#d1d5db"
-              />
-              <text x="70" y="410" class="insole-zone-text">9</text>
-
-              <circle
-                id="zone-11"
-                class="insole-zone"
-                cx="90"
-                cy="490"
-                r="38"
-                fill="#d1d5db"
-              />
-              <text x="90" y="490" class="insole-zone-text">10</text>
-
-              <circle
-                id="zone-9"
-                class="insole-zone"
-                cx="190"
-                cy="380"
-                r="40"
-                fill="#d1d5db"
-              />
-              <text x="190" y="380" class="insole-zone-text">11</text>
-
-              <circle
-                id="zone-12"
-                class="insole-zone"
-                cx="155"
-                cy="540"
-                r="38"
-                fill="#d1d5db"
-              />
-              <text x="155" y="540" class="insole-zone-text">12</text>
-
-              <circle
-                id="zone-13"
-                class="insole-zone"
-                cx="210"
-                cy="610"
-                r="38"
-                fill="#d1d5db"
-              />
-              <text x="210" y="610" class="insole-zone-text">13</text>
-
-              <circle
-                id="zone-15"
-                class="insole-zone"
-                cx="105"
-                cy="610"
-                r="38"
-                fill="#d1d5db"
-              />
-              <text x="105" y="610" class="insole-zone-text">15</text>
-
-              <circle
-                id="zone-14"
-                class="insole-zone"
-                cx="160"
-                cy="680"
-                r="42"
-                fill="#d1d5db"
-              />
-              <text x="160" y="680" class="insole-zone-text">14</text>
-            </g>
-          </svg>
+              <g id="cop-marker" opacity="0">
+                <circle
+                  cx="0"
+                  cy="0"
+                  r="8"
+                  fill="white"
+                  stroke="black"
+                  stroke-width="2"
+                />
+                <line
+                  x1="-5"
+                  y1="0"
+                  x2="5"
+                  y2="0"
+                  stroke="black"
+                  stroke-width="2"
+                />
+                <line
+                  x1="0"
+                  y1="-5"
+                  x2="0"
+                  y2="5"
+                  stroke="black"
+                  stroke-width="2"
+                />
+              </g>
+            </svg>
+          </div>
         </div>
       </main>
       <footer class="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
@@ -389,6 +574,8 @@
       const connectBleBtn = document.getElementById("connect-ble-button");
       const statusDisplay = document.getElementById("status-display");
       const rawDisplay = document.getElementById("raw-data-display");
+      const copXDisplay = document.getElementById("cop-x");
+      const copYDisplay = document.getElementById("cop-y");
 
       // Recording Elements
       const recordBtn = document.getElementById("record-button");
@@ -404,11 +591,28 @@
       let serialPort;
       let serialReader;
       let isConnected = false;
-      
-      // Recording State
       let isRecording = false;
-      let recordedData = []; // Array to store CSV rows
+      let recordedData = [];
       let startTime = 0;
+
+      const coords = [
+        { x: 255, y: 70 },
+        { x: 175, y: 65 },
+        { x: 115, y: 80 },
+        { x: 65, y: 110 },
+        { x: 285, y: 200 },
+        { x: 205, y: 180 },
+        { x: 125, y: 200 },
+        { x: 60, y: 250 },
+        { x: 60, y: 332 },
+        { x: 190, y: 380 },
+        { x: 70, y: 410 },
+        { x: 90, y: 490 },
+        { x: 155, y: 540 },
+        { x: 210, y: 610 },
+        { x: 160, y: 680 },
+        { x: 105, y: 610 },
+      ];
 
       // Check API Support
       if (!("bluetooth" in navigator))
@@ -427,26 +631,16 @@
         statusDisplay.textContent = `🟢 Connected via ${mode}`;
         statusDisplay.className =
           "mt-4 text-sm text-center text-green-600 font-bold";
-
-        // Enable record button
         recordBtn.disabled = false;
         recordBtn.classList.remove("btn-disabled");
 
         if (mode === "USB") {
           connectUsbBtn.textContent = "Disconnect USB";
           connectUsbBtn.classList.replace("bg-blue-600", "bg-red-600");
-          connectUsbBtn.classList.replace(
-            "hover:bg-blue-700",
-            "hover:bg-red-700"
-          );
           disableBtn(connectBleBtn, "Busy");
         } else {
           connectBleBtn.textContent = "Disconnect BLE";
           connectBleBtn.classList.replace("bg-indigo-600", "bg-red-600");
-          connectBleBtn.classList.replace(
-            "hover:bg-indigo-700",
-            "hover:bg-red-700"
-          );
           disableBtn(connectUsbBtn, "Busy");
         }
       }
@@ -456,120 +650,109 @@
         statusDisplay.textContent = "Disconnected.";
         statusDisplay.className =
           "mt-4 text-sm text-center text-gray-500 font-mono";
-        
-        // Disable record button & stop recording if active
         if (isRecording) stopRecording();
         recordBtn.disabled = true;
         recordBtn.classList.add("btn-disabled");
-
-        // Reset USB Btn
         connectUsbBtn.disabled = false;
         connectUsbBtn.textContent = "Connect USB Serial";
         connectUsbBtn.className =
           "w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-xl transition duration-200 shadow-sm flex items-center justify-center gap-2";
-
-        // Reset BLE Btn
         connectBleBtn.disabled = false;
         connectBleBtn.textContent = "Connect Bluetooth";
         connectBleBtn.className =
           "w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl transition duration-200 shadow-sm flex items-center justify-center gap-2";
-
         resetColors();
       }
 
       // ============================================
-      //  RECORDING LOGIC (New)
+      //  LOGIC: RAW -> NEWTONS
+      // ============================================
+      function rawToNewtons(raw) {
+        if (raw < 3) return 0.0;
+        let v = (raw / 255.0) * 3.3;
+        if (v < 0.01) return 0.0;
+        let r_fsr = (3.3 * 10000) / v - 10000;
+        if (r_fsr < 100) r_fsr = 100;
+        let force = 1000000 / r_fsr;
+        return parseFloat(force.toFixed(1));
+      }
+
+      // ============================================
+      //  LOGIC: RECORDING
       // ============================================
       recordBtn.addEventListener("click", () => {
-         if (!isRecording) {
-            startRecording();
-         } else {
-            stopRecording();
-         }
+        if (!isRecording) startRecording();
+        else stopRecording();
       });
 
       function startRecording() {
-         isRecording = true;
-         recordedData = [];
-         startTime = Date.now();
-         
-         // UI Updates
-         recordBtn.textContent = "Stop Recording & Save";
-         recordBtn.classList.replace("bg-gray-700", "bg-red-600");
-         recordBtn.classList.replace("hover:bg-gray-800", "hover:bg-red-700");
-         recordingIndicator.classList.remove("hidden");
-         recordStatus.textContent = "Recording...";
+        isRecording = true;
+        recordedData = [];
+        startTime = Date.now();
+        recordBtn.textContent = "Stop Recording & Save";
+        recordBtn.classList.replace("bg-gray-700", "bg-red-600");
+        recordBtn.classList.replace("hover:bg-gray-800", "hover:bg-red-700");
+        recordingIndicator.classList.remove("hidden");
+        recordStatus.textContent = "Recording...";
       }
 
       function stopRecording() {
-         isRecording = false;
-         
-         // UI Updates
-         recordBtn.textContent = "Start Recording CSV";
-         recordBtn.classList.replace("bg-red-600", "bg-gray-700");
-         recordBtn.classList.replace("hover:bg-red-700", "hover:bg-gray-800");
-         recordingIndicator.classList.add("hidden");
-         
-         if (recordedData.length > 0) {
-            downloadCSV();
-            recordStatus.textContent = `Saved ${recordedData.length} samples.`;
-         } else {
-            recordStatus.textContent = "No data collected.";
-         }
+        isRecording = false;
+        recordBtn.textContent = "Start Recording CSV";
+        recordBtn.classList.replace("bg-red-600", "bg-gray-700");
+        recordBtn.classList.replace("hover:bg-red-700", "hover:bg-gray-800");
+        recordingIndicator.classList.add("hidden");
+        if (recordedData.length > 0) {
+          downloadCSV();
+          recordStatus.textContent = `Saved ${recordedData.length} samples.`;
+        } else {
+          recordStatus.textContent = "No data collected.";
+        }
       }
 
       function saveSample(dataArray) {
-         if (!isRecording) return;
-         
-         const timeOffset = Date.now() - startTime;
-         // Create a row: Time(ms), S0, S1, ..., S15
-         const row = [timeOffset, ...dataArray];
-         recordedData.push(row);
-         
-         // Update counter occasionally
-         if (recordedData.length % 10 === 0) {
-            recordStatus.textContent = `${recordedData.length} samples collected`;
-         }
+        if (!isRecording) return;
+        const timeOffset = Date.now() - startTime;
+        const forceArray = Array.from(dataArray).map((val) =>
+          rawToNewtons(val),
+        );
+        const row = [timeOffset, ...forceArray];
+        recordedData.push(row);
+        if (recordedData.length % 10 === 0) {
+          recordStatus.textContent = `${recordedData.length} samples collected`;
+        }
       }
 
       function downloadCSV() {
-         // CSV Header
-         let csvContent = "Time(ms),Sensor0,Sensor1,Sensor2,Sensor3,Sensor4,Sensor5,Sensor6,Sensor7,Sensor8,Sensor9,Sensor10,Sensor11,Sensor12,Sensor13,Sensor14,Sensor15\n";
-         
-         // Rows
-         csvContent += recordedData.map(e => e.join(",")).join("\n");
-         
-         // Create Blob
-         const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-         const link = document.createElement("a");
-         const url = URL.createObjectURL(blob);
-         
-         // Filename with timestamp
-         const date = new Date();
-         const timestamp = date.toISOString().replace(/[:.]/g, "-");
-         link.setAttribute("href", url);
-         link.setAttribute("download", `insole_data_${timestamp}.csv`);
-         link.style.visibility = "hidden";
-         document.body.appendChild(link);
-         link.click();
-         document.body.removeChild(link);
+        let csvContent =
+          "Time(ms),F0,F1,F2,F3,F4,F5,F6,F7,F8,F9,F10,F11,F12,F13,F14,F15\n";
+        csvContent += recordedData.map((e) => e.join(",")).join("\n");
+        const blob = new Blob([csvContent], {
+          type: "text/csv;charset=utf-8;",
+        });
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        const date = new Date();
+        const timestamp = date.toISOString().replace(/[:.]/g, "-");
+        link.setAttribute("href", url);
+        link.setAttribute("download", `insole_force_data_${timestamp}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
       }
 
       // ============================================
-      //  USB SERIAL LOGIC
+      //  USB SERIAL & BLE
       // ============================================
       connectUsbBtn.addEventListener("click", async () => {
-        if (serialPort) {
-          await disconnectSerial();
-        } else {
-          await connectSerial();
-        }
+        if (serialPort) await disconnectSerial();
+        else await connectSerial();
       });
 
       async function connectSerial() {
         try {
           serialPort = await navigator.serial.requestPort();
-          await serialPort.open({ baudRate: 115200 }); // Must match Arduino
+          await serialPort.open({ baudRate: 115200 });
           updateUIConnected("USB");
           readSerialLoop();
         } catch (err) {
@@ -579,35 +762,29 @@
       }
 
       async function disconnectSerial() {
-        if (serialReader) {
-          await serialReader.cancel();
-          // The loop catches the error and closes port
-        }
+        if (serialReader) await serialReader.cancel();
       }
 
       async function readSerialLoop() {
         const textDecoder = new TextDecoderStream();
         serialReader = serialPort.readable.getReader();
         let buffer = new Uint8Array(0);
-
         try {
           while (true) {
             const { value, done } = await serialReader.read();
             if (done) break;
-
             const newBuffer = new Uint8Array(buffer.length + value.length);
             newBuffer.set(buffer);
             newBuffer.set(value, buffer.length);
             buffer = newBuffer;
-
             while (buffer.length >= 16) {
               const packet = buffer.slice(0, 16);
-              processPacket(packet); // Common processing function
+              processPacket(packet);
               buffer = buffer.slice(16);
             }
           }
         } catch (err) {
-          console.error("Read Error", err);
+          console.error(err);
         } finally {
           serialReader.releaseLock();
           await serialPort.close();
@@ -616,15 +793,10 @@
         }
       }
 
-      // ============================================
-      //  BLUETOOTH LOGIC
-      // ============================================
       connectBleBtn.addEventListener("click", async () => {
-        if (bluetoothDevice && bluetoothDevice.gatt.connected) {
+        if (bluetoothDevice && bluetoothDevice.gatt.connected)
           bluetoothDevice.gatt.disconnect();
-        } else {
-          connectBle();
-        }
+        else connectBle();
       });
 
       async function connectBle() {
@@ -634,17 +806,16 @@
           });
           bluetoothDevice.addEventListener(
             "gattserverdisconnected",
-            updateUIDisconnected
+            updateUIDisconnected,
           );
           const server = await bluetoothDevice.gatt.connect();
           const service = await server.getPrimaryService(SERVICE_UUID);
-          const characteristic = await service.getCharacteristic(
-            CHARACTERISTIC_UUID
-          );
+          const characteristic =
+            await service.getCharacteristic(CHARACTERISTIC_UUID);
           await characteristic.startNotifications();
           characteristic.addEventListener(
             "characteristicvaluechanged",
-            handleBleData
+            handleBleData,
           );
           updateUIConnected("BLE");
         } catch (err) {
@@ -655,41 +826,93 @@
       function handleBleData(event) {
         const dataView = event.target.value;
         const packet = new Uint8Array(dataView.buffer);
-        processPacket(packet); // Common processing function
+        processPacket(packet);
       }
 
       // ============================================
-      //  CORE PROCESSING (Visuals + Recording)
+      //  CORE VISUALIZATION (HEATMAP & CoP)
       // ============================================
       function processPacket(dataArray) {
-         // 1. Update Visuals
-         updateVisuals(dataArray);
-         
-         // 2. Save Data if Recording
-         saveSample(dataArray);
+        updateVisuals(dataArray);
+        updateCoP(dataArray);
+        saveSample(dataArray);
       }
 
       function updateVisuals(dataArray) {
         let rawHtml = "";
-
         for (let i = 0; i < 16; i++) {
-          const val = dataArray[i]; // 0-255
-          updateZoneColor(i, val);
-          rawHtml += `<div class="bg-gray-800 p-1 rounded text-white">${val}</div>`;
+          const rawVal = dataArray[i];
+          const forceVal = rawToNewtons(rawVal);
+          const color = getHeatMapColor(rawVal); // Unified Color Function
+
+          // 1. Update Standard Sensor Map (Left)
+          const zoneEl = document.getElementById(`zone-${i}`);
+          if (zoneEl) zoneEl.style.fill = color;
+
+          // 2. Update Gradient Heatmap (Right)
+          const heatEl = document.getElementById(`heat-${i}`);
+          if (heatEl) {
+            const opacity = Math.min(rawVal / 150, 1); // Opacity helps blending
+            heatEl.style.fill = color;
+            heatEl.style.opacity = opacity;
+          }
+
+          rawHtml += `<div class="bg-gray-800 p-1 rounded text-white font-mono text-sm" title="Raw: ${rawVal}">S${i}:${forceVal}</div>`;
         }
         rawDisplay.innerHTML = rawHtml;
       }
 
-      function updateZoneColor(index, value) {
-        const zoneEl = document.getElementById(`zone-${index}`);
-        if (zoneEl) {
-          zoneEl.style.fill = getHeatMapColor(value);
+      function updateCoP(dataArray) {
+        let totalForce = 0;
+        let weightedX = 0;
+        let weightedY = 0;
+
+        for (let i = 0; i < 16; i++) {
+          const rawVal = dataArray[i];
+          if (rawVal > 10) {
+            // Threshold to avoid noise
+            weightedX += rawVal * coords[i].x;
+            weightedY += rawVal * coords[i].y;
+            totalForce += rawVal;
+          }
+        }
+
+        const copMarker = document.getElementById("cop-marker");
+        const copMarkerInner = copMarker.querySelector("circle");
+
+        if (totalForce > 0) {
+          const copX = weightedX / totalForce;
+          const copY = weightedY / totalForce;
+
+          // Move Marker
+          copMarkerInner.setAttribute("cx", copX);
+          copMarkerInner.setAttribute("cy", copY);
+
+          // Move crosshair lines
+          const lines = copMarker.querySelectorAll("line");
+          lines[0].setAttribute("x1", copX - 5);
+          lines[0].setAttribute("x2", copX + 5);
+          lines[0].setAttribute("y1", copY);
+          lines[0].setAttribute("y2", copY);
+
+          lines[1].setAttribute("x1", copX);
+          lines[1].setAttribute("x2", copX);
+          lines[1].setAttribute("y1", copY - 5);
+          lines[1].setAttribute("y2", copY + 5);
+
+          copMarker.style.opacity = 1;
+
+          copXDisplay.textContent = copX.toFixed(0);
+          copYDisplay.textContent = copY.toFixed(0);
+        } else {
+          copMarker.style.opacity = 0;
         }
       }
 
       function getHeatMapColor(value) {
-        if (value < 15) return "#d1d5db"; // Threshold for 'off'
+        if (value < 15) return "#d1d5db"; // Grey if idle
         const normalized = value / 255;
+        // 120 (Green) -> 0 (Red)
         const hue = 120 - normalized * 120;
         return `hsl(${hue}, 100%, 50%)`;
       }
@@ -698,7 +921,13 @@
         for (let i = 0; i < 16; i++) {
           const zoneEl = document.getElementById(`zone-${i}`);
           if (zoneEl) zoneEl.style.fill = "#d1d5db";
+          const heatEl = document.getElementById(`heat-${i}`);
+          if (heatEl) {
+            heatEl.style.fill = "transparent";
+            heatEl.style.opacity = 0;
+          }
         }
+        document.getElementById("cop-marker").style.opacity = 0;
         rawDisplay.innerHTML = "";
       }
     </script>
