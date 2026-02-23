@@ -245,8 +245,8 @@
                 bleCharacteristic = await service.getCharacteristic(CHAR_UUID_TX);
                 
                 // Start listening for data
-                await bleCharacteristic.startNotifications();
                 bleCharacteristic.addEventListener('characteristicvaluechanged', handleBLEData);
+                await bleCharacteristic.startNotifications();
                 
                 updateStatus("Bluetooth Connected", "#9b59b6");
                 logDebug("BLE Connected & Listening for Data!");
@@ -294,7 +294,7 @@
         // --- DATA PROCESSING (EXTRACTING TEMPERATURES) ---
         function processLine(line) {
             // Uncomment the next line if you want to see every single message arrive in the black box
-            // logDebug("RX: " + line);
+            logDebug("RX: " + line);
 
             // Regex: looks for "Ref(Room): 24.50 | Shirt: 32.10"
             const regex = /Ref\(Room\):\s*([\d\.\-]+)\s*\|\s*Shirt:\s*([\d\.\-]+)/;
