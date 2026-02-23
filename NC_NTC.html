@@ -1,367 +1,604 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart Shirt Studio</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Smart Insole (Matched Colors)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
     <style>
-        /* --- STYLES --- */
-        body {
-            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-            background-color: #f4f6f8;
-            color: #333;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 20px;
-        }
-        h1 { margin-bottom: 20px; color: #2c3e50; }
-        
-        .card {
-            background-color: #ffffff;
-            padding: 30px;
-            border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-            text-align: center;
-            width: 100%;
-            max-width: 500px;
-            margin-bottom: 20px;
-        }
+      body {
+        font-family: "Inter", sans-serif;
+      }
+      /* Standard Sensor Style (Left Side) */
+      .insole-zone {
+        transition: fill 0.1s ease; /* Smoother transition */
+        stroke: #374151;
+        stroke-width: 1.5;
+        stroke-linejoin: round;
+        stroke-dasharray: 4 2;
+      }
+      .insole-zone-text {
+        font-size: 18px;
+        font-weight: 700;
+        fill: #1f2937;
+        pointer-events: none;
+        text-anchor: middle;
+        dominant-baseline: middle;
+        opacity: 0.7;
+      }
 
-        .temp-display {
-            font-size: 5rem;
-            font-weight: 700;
-            color: #27ae60;
-            margin: 10px 0;
+      /* Heatmap Style (Right Side) */
+      .heatmap-blob {
+        transition:
+          opacity 0.1s ease,
+          fill 0.1s ease;
+        mix-blend-mode: multiply; /* Helps colors blend */
+      }
+
+      /* CoP Marker */
+      #cop-marker {
+        transition:
+          cx 0.1s linear,
+          cy 0.1s linear,
+          opacity 0.2s;
+        pointer-events: none;
+        filter: drop-shadow(0px 0px 2px rgba(0, 0, 0, 0.5));
+      }
+
+      .btn-disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      @keyframes blink {
+        0% {
+          opacity: 1;
         }
-        .unit { font-size: 2rem; color: #7f8c8d; font-weight: 400;}
-        
-        .status {
-            font-size: 0.9rem;
-            font-weight: bold;
-            color: #e74c3c;
-            margin-bottom: 20px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
+        50% {
+          opacity: 0.4;
         }
-
-        .btn-group {
-            display: flex;
-            gap: 10px;
-            justify-content: center;
-            flex-wrap: wrap;
-            margin-top: 10px;
+        100% {
+          opacity: 1;
         }
-
-        button {
-            padding: 12px 24px;
-            font-size: 1rem;
-            font-weight: 600;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            color: white;
-        }
-
-        .btn-usb { background-color: #3498db; }
-        .btn-usb:hover { background-color: #2980b9; }
-        
-        .btn-ble { background-color: #9b59b6; }
-        .btn-ble:hover { background-color: #8e44ad; }
-
-        .btn-csv { background-color: #f39c12; }
-        .btn-csv:hover { background-color: #d35400; }
-
-        .btn-img { background-color: #34495e; }
-        .btn-img:hover { background-color: #2c3e50; }
-
-        .chart-container {
-            width: 100%;
-            max-width: 900px;
-            background-color: #ffffff;
-            padding: 20px;
-            border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-        }
-
-        /* Debug Box */
-        #debugLog {
-            margin-top: 20px;
-            width: 100%; max-width: 900px; height: 150px;
-            background-color: #1e1e1e; color: #00ff00;
-            font-family: monospace; font-size: 0.85rem;
-            padding: 15px; overflow-y: scroll; border-radius: 8px;
-            border: 2px solid #333;
-        }
+      }
+      .recording-dot {
+        animation: blink 1.5s infinite;
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body class="bg-gray-100 text-gray-800 flex items-center justify-center min-h-screen p-4">
+    <div class="w-full max-w-7xl bg-white rounded-2xl shadow-xl p-6 md:p-8">
+      <header class="text-center mb-8">
+        <h1 class="text-3xl font-bold text-gray-900">Smart Insole Monitor</h1>
+        <p class="text-gray-500 mt-2">Heatmap & Center of Pressure (CoP)</p>
+      </header>
 
-    <h1>Smart Shirt Studio</h1>
+      <main class="grid grid-cols-1 xl:grid-cols-3 gap-8 items-start">
+        <div class="flex flex-col space-y-6">
+          <div class="bg-gray-50 border border-gray-200 p-6 rounded-xl">
+            <h2 class="text-lg font-semibold mb-4 text-gray-700">Connection</h2>
+            <div class="flex flex-col gap-3">
+              <button
+                id="connect-usb-button"
+                class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-xl transition duration-200 shadow-sm flex items-center justify-center gap-2"
+              >
+                Connect USB Serial
+              </button>
+              <button
+                id="connect-ble-button"
+                class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl transition duration-200 shadow-sm flex items-center justify-center gap-2"
+              >
+                Connect Bluetooth
+              </button>
+            </div>
+            <p id="status-display" class="mt-4 text-sm text-center text-gray-500 font-mono">
+              Ready to connect...
+            </p>
+          </div>
 
-    <div class="card">
-        <div class="status" id="statusText">Disconnected</div>
-        
-        <div>Average Shirt Temperature</div>
-        <div class="temp-display">
-            <span id="tempValue">--.-</span><span class="unit">°C</span>
+          <div class="bg-gray-50 border border-gray-200 p-6 rounded-xl">
+            <div class="flex justify-between items-center mb-3">
+              <h2 class="text-lg font-semibold text-gray-700">
+                Data Recording
+              </h2>
+              <div id="recording-indicator" class="hidden flex items-center text-red-600 font-bold text-sm">
+                <div class="w-3 h-3 bg-red-600 rounded-full mr-2 recording-dot"></div>
+                REC
+              </div>
+            </div>
+            <button
+              id="record-button"
+              class="w-full bg-gray-700 hover:bg-gray-800 text-white font-bold py-3 px-6 rounded-xl transition duration-200 shadow-sm flex items-center justify-center gap-2 btn-disabled"
+              disabled
+            >
+              Start Recording CSV
+            </button>
+            <p id="record-status" class="mt-2 text-xs text-center text-gray-500">
+              0 samples collected
+            </p>
+          </div>
+
+          <div class="bg-gray-900 text-green-400 p-4 rounded-xl font-mono text-xs overflow-hidden">
+            <div class="flex justify-between mb-2 border-b border-gray-700 pb-1">
+              <span>FORCE (N)</span>
+            </div>
+            <div id="raw-data-display" class="grid grid-cols-4 gap-2 text-center"></div>
+            <div class="mt-2 pt-2 border-t border-gray-700 text-center text-gray-500">
+              CoP: X:<span id="cop-x">0</span> Y:<span id="cop-y">0</span>
+            </div>
+          </div>
         </div>
-        <p style="color: #7f8c8d;">Reference Room Temp: <strong id="refValue">--</strong> °C</p>
-        
-        <div class="btn-group">
-            <button id="btnUsb" class="btn-usb">🔌 Connect USB</button>
-            <button id="btnBle" class="btn-ble">🔵 Connect Bluetooth</button>
+
+        <div class="flex flex-col items-center">
+          <h3 class="text-lg font-bold text-gray-700 mb-2">Sensor Layout</h3>
+          <div class="flex justify-center items-center bg-gray-50 rounded-2xl p-4 border border-gray-200 shadow-inner">
+            <svg width="300" height="800" viewBox="0 0 350 700" xmlns="http://www.w3.org/2000/svg">
+              <g transform="translate(-90.000000,788.000000) scale(0.180000,-0.145000)" stroke="none" fill="#e5e7eb">
+                <path d="M1524 5790 c-397 -85 -767 -664 -909 -1420 -15 -80 -38 -202 -51-271 -41 -220 -57 -375 -57 -559 0 -197 17 -329 62 -485 56 -193 76 -363 91-748 13 -325 24 -459 60 -707 58 -395 71 -468 125 -714 66 -302 99 -382 201-484 125 -125 311 -183 478 -149 182 37 352 163 431 317 46 91 55 143 55 3210 229 -22 397 -102 769 -50 236 -68 366 -68 510 0 310 56 502 229 777 149 236236 451 325 799 l46 182 0 203 c0 112 -5 256 -10 319 -63 694 -315 1201 -6551321 -67 23 -188 33 -251 19z m255 -38 c296 -115 522 -526 612 -1117 16 -10922 -204 26 -425 5 -283 5 -286 -22 -390 -108 -430 -178 -606 -353 -885 -143-229 -193 -374 -214 -629 -16 -190 -1 -345 61 -641 111 -522 136 -839 80-1012 -42 -129 -155 -257 -290 -328 -287 -151 -634 -18 -746 285 -21 56 -113462 -132 580 -92 577 -107 709 -121 1077 -16 415 -37 579 -108 853 -31 121-52 290 -52 428 0 113 26 347 56 510 14 76 34 187 44 247 91 518 288 972 5341232 118 125 220 193 346 229 65 19 212 12 279 -14z"/>
+              </g>
+              <g>
+                <ellipse id="zone-0" class="insole-zone" cx="255" cy="70" rx="42" ry="55" fill="#d1d5db" />
+                <text x="255" y="70" class="insole-zone-text">0</text>
+                <ellipse id="zone-1" class="insole-zone" cx="175" cy="65" rx="28" ry="38" fill="#d1d5db" />
+                <text x="175" y="65" class="insole-zone-text">1</text>
+                <ellipse id="zone-2" class="insole-zone" cx="115" cy="80" rx="25" ry="32" fill="#d1d5db" />
+                <text x="115" y="80" class="insole-zone-text">2</text>
+                <circle id="zone-3" class="insole-zone" cx="65" cy="110" r="22" fill="#d1d5db" />
+                <text x="65" y="110" class="insole-zone-text">3</text>
+                <circle id="zone-4" class="insole-zone" cx="285" cy="200" r="40" fill="#d1d5db" />
+                <text x="285" y="200" class="insole-zone-text">4</text>
+                <circle id="zone-5" class="insole-zone" cx="205" cy="180" r="40" fill="#d1d5db" />
+                <text x="205" y="180" class="insole-zone-text">5</text>
+                <circle id="zone-6" class="insole-zone" cx="125" cy="200" r="40" fill="#d1d5db" />
+                <text x="125" y="200" class="insole-zone-text">6</text>
+                <circle id="zone-7" class="insole-zone" cx="60" cy="250" r="40" fill="#d1d5db" />
+                <text x="60" y="250" class="insole-zone-text">7</text>
+                <circle id="zone-8" class="insole-zone" cx="60" cy="332" r="38" fill="#d1d5db" />
+                <text x="60" y="332" class="insole-zone-text">8</text>
+                <circle id="zone-10" class="insole-zone" cx="70" cy="410" r="36" fill="#d1d5db" />
+                <text x="70" y="410" class="insole-zone-text">9</text>
+                <circle id="zone-11" class="insole-zone" cx="90" cy="490" r="38" fill="#d1d5db" />
+                <text x="90" y="490" class="insole-zone-text">10</text>
+                <circle id="zone-9" class="insole-zone" cx="190" cy="380" r="40" fill="#d1d5db" />
+                <text x="190" y="380" class="insole-zone-text">11</text>
+                <circle id="zone-12" class="insole-zone" cx="155" cy="540" r="38" fill="#d1d5db" />
+                <text x="155" y="540" class="insole-zone-text">12</text>
+                <circle id="zone-13" class="insole-zone" cx="210" cy="610" r="38" fill="#d1d5db" />
+                <text x="210" y="610" class="insole-zone-text">13</text>
+                <circle id="zone-15" class="insole-zone" cx="105" cy="610" r="38" fill="#d1d5db" />
+                <text x="105" y="610" class="insole-zone-text">15</text>
+                <circle id="zone-14" class="insole-zone" cx="160" cy="680" r="42" fill="#d1d5db" />
+                <text x="160" y="680" class="insole-zone-text">14</text>
+              </g>
+            </svg>
+          </div>
         </div>
-        <div class="btn-group" style="margin-top:15px; border-top: 1px solid #eee; padding-top:15px;">
-            <button id="btnCsv" class="btn-csv">💾 Save CSV</button>
-            <button id="btnImg" class="btn-img">📷 Save Plot</button>
+
+        <div class="flex flex-col items-center">
+          <h3 class="text-lg font-bold text-gray-700 mb-2">
+            Gradient Heatmap & CoP
+          </h3>
+          <div class="flex justify-center items-center bg-gray-50 rounded-2xl p-4 border border-gray-200 shadow-inner">
+            <svg width="300" height="800" viewBox="0 0 350 700" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <filter id="heatmap-blur" x="-50%" y="-50%" width="200%" height="200%">
+                  <feGaussianBlur in="SourceGraphic" stdDeviation="25" />
+                </filter>
+                <clipPath id="insole-clip">
+                  <path transform="translate(-90.000000,788.000000) scale(0.180000,-0.145000)" d="M1524 5790 c-397 -85 -767 -664 -909 -1420 -15 -80 -38 -202 -51-271 -41 -220 -57 -375 -57 -559 0 -197 17 -329 62 -485 56 -193 76 -363 91-748 13 -325 24 -459 60 -707 58 -395 71 -468 125 -714 66 -302 99 -382 201-484 125 -125 311 -183 478 -149 182 37 352 163 431 317 46 91 55 143 55 3210 229 -22 397 -102 769 -50 236 -68 366 -68 510 0 310 56 502 229 777 149 236236 451 325 799 l46 182 0 203 c0 112 -5 256 -10 319 -63 694 -315 1201 -6551321 -67 23 -188 33 -251 19z m255 -38 c296 -115 522 -526 612 -1117 16 -10922 -204 26 -425 5 -283 5 -286 -22 -390 -108 -430 -178 -606 -353 -885 -143-229 -193 -374 -214 -629 -16 -190 -1 -345 61 -641 111 -522 136 -839 80-1012 -42 -129 -155 -257 -290 -328 -287 -151 -634 -18 -746 285 -21 56 -113462 -132 580 -92 577 -107 709 -121 1077 -16 415 -37 579 -108 853 -31 121-52 290 -52 428 0 113 26 347 56 510 14 76 34 187 44 247 91 518 288 972 5341232 118 125 220 193 346 229 65 19 212 12 279 -14z"/>
+                </clipPath>
+              </defs>
+
+              <g transform="translate(-90.000000,788.000000) scale(0.180000,-0.145000)" stroke="none" fill="#e5e7eb">
+                <path d="M1524 5790 c-397 -85 -767 -664 -909 -1420 -15 -80 -38 -202 -51-271 -41 -220 -57 -375 -57 -559 0 -197 17 -329 62 -485 56 -193 76 -363 91-748 13 -325 24 -459 60 -707 58 -395 71 -468 125 -714 66 -302 99 -382 201-484 125 -125 311 -183 478 -149 182 37 352 163 431 317 46 91 55 143 55 3210 229 -22 397 -102 769 -50 236 -68 366 -68 510 0 310 56 502 229 777 149 236236 451 325 799 l46 182 0 203 c0 112 -5 256 -10 319 -63 694 -315 1201 -6551321 -67 23 -188 33 -251 19z m255 -38 c296 -115 522 -526 612 -1117 16 -10922 -204 26 -425 5 -283 5 -286 -22 -390 -108 -430 -178 -606 -353 -885 -143-229 -193 -374 -214 -629 -16 -190 -1 -345 61 -641 111 -522 136 -839 80-1012 -42 -129 -155 -257 -290 -328 -287 -151 -634 -18 -746 285 -21 56 -113462 -132 580 -92 577 -107 709 -121 1077 -16 415 -37 579 -108 853 -31 121-52 290 -52 428 0 113 26 347 56 510 14 76 34 187 44 247 91 518 288 972 5341232 118 125 220 193 346 229 65 19 212 12 279 -14z"/>
+              </g>
+
+              <g clip-path="url(#insole-clip)" filter="url(#heatmap-blur)">
+                <circle id="heat-0" class="heatmap-blob" cx="255" cy="70" r="50" fill="transparent" />
+                <circle id="heat-1" class="heatmap-blob" cx="175" cy="65" r="45" fill="transparent" />
+                <circle id="heat-2" class="heatmap-blob" cx="115" cy="80" r="45" fill="transparent" />
+                <circle id="heat-3" class="heatmap-blob" cx="65" cy="110" r="40" fill="transparent" />
+                <circle id="heat-4" class="heatmap-blob" cx="285" cy="200" r="55" fill="transparent" />
+                <circle id="heat-5" class="heatmap-blob" cx="205" cy="180" r="55" fill="transparent" />
+                <circle id="heat-6" class="heatmap-blob" cx="125" cy="200" r="55" fill="transparent" />
+                <circle id="heat-7" class="heatmap-blob" cx="60" cy="250" r="55" fill="transparent" />
+                <circle id="heat-8" class="heatmap-blob" cx="60" cy="332" r="50" fill="transparent" />
+                <circle id="heat-10" class="heatmap-blob" cx="70" cy="410" r="50" fill="transparent" />
+                <circle id="heat-11" class="heatmap-blob" cx="90" cy="490" r="50" fill="transparent" />
+                <circle id="heat-9" class="heatmap-blob" cx="190" cy="380" r="50" fill="transparent" />
+                <circle id="heat-12" class="heatmap-blob" cx="155" cy="540" r="50" fill="transparent" />
+                <circle id="heat-13" class="heatmap-blob" cx="210" cy="610" r="50" fill="transparent" />
+                <circle id="heat-15" class="heatmap-blob" cx="105" cy="610" r="50" fill="transparent" />
+                <circle id="heat-14" class="heatmap-blob" cx="160" cy="680" r="50" fill="transparent" />
+              </g>
+
+              <g id="cop-marker" opacity="0">
+                <circle cx="0" cy="0" r="8" fill="white" stroke="black" stroke-width="2" />
+                <line x1="-5" y1="0" x2="5" y2="0" stroke="black" stroke-width="2" />
+                <line x1="0" y1="-5" x2="0" y2="5" stroke="black" stroke-width="2" />
+              </g>
+            </svg>
+          </div>
         </div>
+      </main>
+      <footer class="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+        <div class="flex items-center space-x-6">
+          <img src="img/Logo-Sapienza.png" alt="Sapienza Logo" class="h-16 bg-white p-2 rounded-md" />
+          <img src="img/D3-4-Health-Logo.png" alt="DDD4Health Logo" class="h-16 bg-white p-2 rounded-md" />
+        </div>
+      </footer>
     </div>
-
-    <div class="chart-container">
-        <canvas id="tempChart"></canvas>
-    </div>
-
-    <div id="debugLog">System Ready. Waiting for connection...</div>
 
     <script>
-        // --- CONFIGURATION ---
-        const SMOOTHING_WINDOW = 50; 
-        
-        // --- VARIABLES ---
-        let port, reader; 
-        let bluetoothDevice, bleCharacteristic; 
-        let shirtReadings = [];
-        let dataHistory = []; 
-        let chart;
-        
-        // --- NEW BLUETOOTH BUFFER ---
-        let bleBuffer = ""; // This holds incomplete packets so they can be glued together!
-        
-        // --- NORDIC UART SERVICE UUIDs (Standard for Adafruit Bluefruit) ---
-        const SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
-        const CHAR_UUID_TX = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
+      const connectUsbBtn = document.getElementById("connect-usb-button");
+      const connectBleBtn = document.getElementById("connect-ble-button");
+      const statusDisplay = document.getElementById("status-display");
+      const rawDisplay = document.getElementById("raw-data-display");
+      const copXDisplay = document.getElementById("cop-x");
+      const copYDisplay = document.getElementById("cop-y");
 
-        // --- CHART SETUP ---
-        const ctx = document.getElementById('tempChart').getContext('2d');
-        const whiteBackgroundPlugin = {
-            id: 'customCanvasBackgroundColor',
-            beforeDraw: (chart) => {
-                const ctx = chart.canvas.getContext('2d');
-                ctx.save();
-                ctx.globalCompositeOperation = 'destination-over';
-                ctx.fillStyle = 'white';
-                ctx.fillRect(0, 0, chart.width, chart.height);
-                ctx.restore();
-            }
-        };
+      // Recording Elements
+      const recordBtn = document.getElementById("record-button");
+      const recordStatus = document.getElementById("record-status");
+      const recordingIndicator = document.getElementById("recording-indicator");
 
-        chart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: Array(50).fill(''), 
-                datasets: [{
-                    label: 'Shirt Temperature',
-                    borderColor: '#27ae60',
-                    backgroundColor: 'rgba(39, 174, 96, 0.1)',
-                    borderWidth: 2,
-                    data: Array(50).fill(null),
-                    tension: 0.4, 
-                    fill: true,
-                    pointRadius: 0
-                }]
-            },
-            options: {
-                responsive: true,
-                animation: false,
-                scales: {
-                    y: { suggestedMin: 20, suggestedMax: 40 }
-                }
-            },
-            plugins: [whiteBackgroundPlugin]
+      // BLE Config
+      const SERVICE_UUID = "19b10000-e8f2-537e-4f6c-d104768a1214";
+      const CHARACTERISTIC_UUID = "19b10001-e8f2-537e-4f6c-d104768a1214";
+
+      // Global State
+      let bluetoothDevice;
+      let serialPort;
+      let serialReader;
+      let isConnected = false;
+      let isRecording = false;
+      let recordedData = [];
+      let startTime = 0;
+
+      const coords = [
+        { x: 255, y: 70 },
+        { x: 175, y: 65 },
+        { x: 115, y: 80 },
+        { x: 65, y: 110 },
+        { x: 285, y: 200 },
+        { x: 205, y: 180 },
+        { x: 125, y: 200 },
+        { x: 60, y: 250 },
+        { x: 60, y: 332 },
+        { x: 190, y: 380 },
+        { x: 70, y: 410 },
+        { x: 90, y: 490 },
+        { x: 155, y: 540 },
+        { x: 210, y: 610 },
+        { x: 160, y: 680 },
+        { x: 105, y: 610 },
+      ];
+
+      // Check API Support
+      if (!("bluetooth" in navigator))
+        disableBtn(connectBleBtn, "Bluetooth not supported");
+      if (!("serial" in navigator))
+        disableBtn(connectUsbBtn, "Web Serial not supported");
+
+      function disableBtn(btn, msg) {
+        btn.disabled = true;
+        btn.classList.add("btn-disabled");
+        btn.title = msg;
+      }
+
+      function updateUIConnected(mode) {
+        isConnected = true;
+        statusDisplay.textContent = `🟢 Connected via ${mode}`;
+        statusDisplay.className =
+          "mt-4 text-sm text-center text-green-600 font-bold";
+        recordBtn.disabled = false;
+        recordBtn.classList.remove("btn-disabled");
+
+        if (mode === "USB") {
+          connectUsbBtn.textContent = "Disconnect USB";
+          connectUsbBtn.classList.replace("bg-blue-600", "bg-red-600");
+          disableBtn(connectBleBtn, "Busy");
+        } else {
+          connectBleBtn.textContent = "Disconnect BLE";
+          connectBleBtn.classList.replace("bg-indigo-600", "bg-red-600");
+          disableBtn(connectUsbBtn, "Busy");
+        }
+      }
+
+      function updateUIDisconnected() {
+        isConnected = false;
+        statusDisplay.textContent = "Disconnected.";
+        statusDisplay.className =
+          "mt-4 text-sm text-center text-gray-500 font-mono";
+        if (isRecording) stopRecording();
+        recordBtn.disabled = true;
+        recordBtn.classList.add("btn-disabled");
+        connectUsbBtn.disabled = false;
+        connectUsbBtn.textContent = "Connect USB Serial";
+        connectUsbBtn.className =
+          "w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-xl transition duration-200 shadow-sm flex items-center justify-center gap-2";
+        connectBleBtn.disabled = false;
+        connectBleBtn.textContent = "Connect Bluetooth";
+        connectBleBtn.className =
+          "w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl transition duration-200 shadow-sm flex items-center justify-center gap-2";
+        resetColors();
+      }
+
+      // ============================================
+      //  LOGIC: RAW -> NEWTONS
+      // ============================================
+      function rawToNewtons(raw) {
+        if (raw < 3) return 0.0;
+        let v = (raw / 255.0) * 3.3;
+        if (v < 0.01) return 0.0;
+        let r_fsr = (3.3 * 10000) / v - 10000;
+        if (r_fsr < 100) r_fsr = 100;
+        let force = 1000000 / r_fsr;
+        return parseFloat(force.toFixed(1));
+      }
+
+      // ============================================
+      //  LOGIC: RECORDING
+      // ============================================
+      recordBtn.addEventListener("click", () => {
+        if (!isRecording) startRecording();
+        else stopRecording();
+      });
+
+      function startRecording() {
+        isRecording = true;
+        recordedData = [];
+        startTime = Date.now();
+        recordBtn.textContent = "Stop Recording & Save";
+        recordBtn.classList.replace("bg-gray-700", "bg-red-600");
+        recordBtn.classList.replace("hover:bg-gray-800", "hover:bg-red-700");
+        recordingIndicator.classList.remove("hidden");
+        recordStatus.textContent = "Recording...";
+      }
+
+      function stopRecording() {
+        isRecording = false;
+        recordBtn.textContent = "Start Recording CSV";
+        recordBtn.classList.replace("bg-red-600", "bg-gray-700");
+        recordBtn.classList.replace("hover:bg-red-700", "hover:bg-gray-800");
+        recordingIndicator.classList.add("hidden");
+        if (recordedData.length > 0) {
+          downloadCSV();
+          recordStatus.textContent = `Saved ${recordedData.length} samples.`;
+        } else {
+          recordStatus.textContent = "No data collected.";
+        }
+      }
+
+      function saveSample(dataArray) {
+        if (!isRecording) return;
+        const timeOffset = Date.now() - startTime;
+        const forceArray = Array.from(dataArray).map((val) =>
+          rawToNewtons(val),
+        );
+        const row = [timeOffset, ...forceArray];
+        recordedData.push(row);
+        if (recordedData.length % 10 === 0) {
+          recordStatus.textContent = `${recordedData.length} samples collected`;
+        }
+      }
+
+      function downloadCSV() {
+        let csvContent =
+          "Time(ms),F0,F1,F2,F3,F4,F5,F6,F7,F8,F9,F10,F11,F12,F13,F14,F15\n";
+        csvContent += recordedData.map((e) => e.join(",")).join("\n");
+        const blob = new Blob([csvContent], {
+          type: "text/csv;charset=utf-8;",
         });
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        const date = new Date();
+        const timestamp = date.toISOString().replace(/[:.]/g, "-");
+        link.setAttribute("href", url);
+        link.setAttribute("download", `insole_force_data_${timestamp}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
 
-        // --- BUTTON EVENTS ---
-        document.getElementById('btnUsb').addEventListener('click', connectUSB);
-        document.getElementById('btnBle').addEventListener('click', connectBLE);
-        document.getElementById('btnCsv').addEventListener('click', downloadCSV);
-        document.getElementById('btnImg').addEventListener('click', downloadPlot);
+      // ============================================
+      //  USB SERIAL & BLE
+      // ============================================
+      connectUsbBtn.addEventListener("click", async () => {
+        if (serialPort) await disconnectSerial();
+        else await connectSerial();
+      });
 
-        // --- DEBUG LOGGING HELPER ---
-        function logDebug(msg) {
-            const el = document.getElementById('debugLog');
-            // Adds the newest message to the top
-            el.innerText = `[${new Date().toLocaleTimeString()}] ${msg}\n` + el.innerText.substring(0, 1500);
+      async function connectSerial() {
+        try {
+          serialPort = await navigator.serial.requestPort();
+          await serialPort.open({ baudRate: 115200 });
+          updateUIConnected("USB");
+          readSerialLoop();
+        } catch (err) {
+          console.error(err);
+          statusDisplay.textContent = "USB Error: " + err.message;
         }
+      }
 
-        // --- USB CONNECTION ---
-        async function connectUSB() {
-            if ("serial" in navigator) {
-                try {
-                    port = await navigator.serial.requestPort();
-                    await port.open({ baudRate: 115200, flowControl: "none" }); 
-                    updateStatus("USB Connected", "#3498db");
-                    logDebug("USB Connected successfully.");
-                    readLoopUSB();
-                } catch (err) { alert("USB Error: " + err); }
-            } else { alert("Web Serial not supported."); }
-        }
+      async function disconnectSerial() {
+        if (serialReader) await serialReader.cancel();
+      }
 
-        async function readLoopUSB() {
-            const textDecoder = new TextDecoderStream();
-            const readableStreamClosed = port.readable.pipeTo(textDecoder.writable);
-            reader = textDecoder.readable.getReader();
-            let usbBuffer = "";
-            try {
-                while (true) {
-                    const { value, done } = await reader.read();
-                    if (done) break;
-                    usbBuffer += value;
-                    let lines = usbBuffer.split('\n');
-                    usbBuffer = lines.pop(); 
-                    for (const line of lines) {
-                        processLine(line.trim());
-                    }
-                }
-            } catch (error) { console.error(error); logDebug("USB Read Error: " + error); }
-        }
-
-        // --- BLUETOOTH CONNECTION ---
-        async function connectBLE() {
-            if (!navigator.bluetooth) { alert("Web Bluetooth not supported."); return; }
-            try {
-                logDebug("Requesting BLE Device...");
-                bluetoothDevice = await navigator.bluetooth.requestDevice({
-                    filters: [{ services: [SERVICE_UUID] }] 
-                });
-                
-                updateStatus("Connecting BLE...", "#f39c12");
-                const server = await bluetoothDevice.gatt.connect();
-                const service = await server.getPrimaryService(SERVICE_UUID);
-                
-                // Get the TX Characteristic (The one the Arduino sends data on)
-                bleCharacteristic = await service.getCharacteristic(CHAR_UUID_TX);
-                
-                // Start listening for data
-                bleCharacteristic.addEventListener('characteristicvaluechanged', handleBLEData);
-                await bleCharacteristic.startNotifications();
-                
-                updateStatus("Bluetooth Connected", "#9b59b6");
-                logDebug("BLE Connected & Listening for Data!");
-
-                // Handle unexpected disconnects
-                bluetoothDevice.addEventListener('gattserverdisconnected', () => {
-                    updateStatus("Disconnected", "#e74c3c");
-                    logDebug("BLE Device Disconnected.");
-                });
-
-            } catch (error) {
-                console.log(error);
-                if (!error.toString().includes("User cancelled")) {
-                    alert("BLE Error: " + error);
-                    logDebug("BLE Error: " + error);
-                }
+      async function readSerialLoop() {
+        const textDecoder = new TextDecoderStream();
+        serialReader = serialPort.readable.getReader();
+        let buffer = new Uint8Array(0);
+        try {
+          while (true) {
+            const { value, done } = await serialReader.read();
+            if (done) break;
+            const newBuffer = new Uint8Array(buffer.length + value.length);
+            newBuffer.set(buffer);
+            newBuffer.set(value, buffer.length);
+            buffer = newBuffer;
+            while (buffer.length >= 16) {
+              const packet = buffer.slice(0, 16);
+              processPacket(packet);
+              buffer = buffer.slice(16);
             }
+          }
+        } catch (err) {
+          console.error(err);
+        } finally {
+          serialReader.releaseLock();
+          await serialPort.close();
+          serialPort = null;
+          updateUIDisconnected();
+        }
+      }
+
+      connectBleBtn.addEventListener("click", async () => {
+        if (bluetoothDevice && bluetoothDevice.gatt.connected)
+          bluetoothDevice.gatt.disconnect();
+        else connectBle();
+      });
+
+      // --- BLE CONNECTION WITH THE LISTENER FIX APPLIED ---
+      async function connectBle() {
+        try {
+          bluetoothDevice = await navigator.bluetooth.requestDevice({
+            filters: [{ services: [SERVICE_UUID] }],
+          });
+          bluetoothDevice.addEventListener(
+            "gattserverdisconnected",
+            updateUIDisconnected,
+          );
+          
+          const server = await bluetoothDevice.gatt.connect();
+          const service = await server.getPrimaryService(SERVICE_UUID);
+          const characteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
+          
+          // CRITICAL FIX: Add the event listener FIRST
+          characteristic.addEventListener(
+            "characteristicvaluechanged",
+            handleBleData,
+          );
+          
+          // Then start the notifications
+          await characteristic.startNotifications();
+          
+          updateUIConnected("BLE");
+        } catch (err) {
+          statusDisplay.textContent = "BLE Error: " + err.message;
+        }
+      }
+
+      function handleBleData(event) {
+        const dataView = event.target.value;
+        const packet = new Uint8Array(dataView.buffer);
+        processPacket(packet);
+      }
+
+      // ============================================
+      //  CORE VISUALIZATION (HEATMAP & CoP)
+      // ============================================
+      function processPacket(dataArray) {
+        updateVisuals(dataArray);
+        updateCoP(dataArray);
+        saveSample(dataArray);
+      }
+
+      function updateVisuals(dataArray) {
+        let rawHtml = "";
+        for (let i = 0; i < 16; i++) {
+          const rawVal = dataArray[i];
+          const forceVal = rawToNewtons(rawVal);
+          const color = getHeatMapColor(rawVal); // Unified Color Function
+
+          // 1. Update Standard Sensor Map (Left)
+          const zoneEl = document.getElementById(`zone-${i}`);
+          if (zoneEl) zoneEl.style.fill = color;
+
+          // 2. Update Gradient Heatmap (Right)
+          const heatEl = document.getElementById(`heat-${i}`);
+          if (heatEl) {
+            const opacity = Math.min(rawVal / 150, 1); // Opacity helps blending
+            heatEl.style.fill = color;
+            heatEl.style.opacity = opacity;
+          }
+
+          rawHtml += `<div class="bg-gray-800 p-1 rounded text-white font-mono text-sm" title="Raw: ${rawVal}">S${i}:${forceVal}</div>`;
+        }
+        rawDisplay.innerHTML = rawHtml;
+      }
+
+      function updateCoP(dataArray) {
+        let totalForce = 0;
+        let weightedX = 0;
+        let weightedY = 0;
+
+        for (let i = 0; i < 16; i++) {
+          const rawVal = dataArray[i];
+          if (rawVal > 10) {
+            // Threshold to avoid noise
+            weightedX += rawVal * coords[i].x;
+            weightedY += rawVal * coords[i].y;
+            totalForce += rawVal;
+          }
         }
 
-        // --- BLUETOOTH DATA HANDLER (WITH CHUNKING FIX) ---
-        function handleBLEData(event) {
-            const value = event.target.value;
-            const decoder = new TextDecoder('utf-8');
-            const chunk = decoder.decode(value);
-            
-            // Add the new chunk of text to our global buffer
-            bleBuffer += chunk;
-            
-            // Split by newline to find complete sentences
-            let lines = bleBuffer.split('\n');
-            
-            // The last item in the array is either empty (if it ended perfectly with \n) 
-            // or an incomplete piece of the next message. We save it back to the buffer.
-            bleBuffer = lines.pop(); 
-            
-            // Process all the complete lines we found
-            for (let i = 0; i < lines.length; i++) {
-                const line = lines[i].trim();
-                if (line.length > 0) {
-                    processLine(line);
-                }
-            }
+        const copMarker = document.getElementById("cop-marker");
+        const copMarkerInner = copMarker.querySelector("circle");
+
+        if (totalForce > 0) {
+          const copX = weightedX / totalForce;
+          const copY = weightedY / totalForce;
+
+          // Move Marker
+          copMarkerInner.setAttribute("cx", copX);
+          copMarkerInner.setAttribute("cy", copY);
+
+          // Move crosshair lines
+          const lines = copMarker.querySelectorAll("line");
+          lines[0].setAttribute("x1", copX - 5);
+          lines[0].setAttribute("x2", copX + 5);
+          lines[0].setAttribute("y1", copY);
+          lines[0].setAttribute("y2", copY);
+
+          lines[1].setAttribute("x1", copX);
+          lines[1].setAttribute("x2", copX);
+          lines[1].setAttribute("y1", copY - 5);
+          lines[1].setAttribute("y2", copY + 5);
+
+          copMarker.style.opacity = 1;
+
+          copXDisplay.textContent = copX.toFixed(0);
+          copYDisplay.textContent = copY.toFixed(0);
+        } else {
+          copMarker.style.opacity = 0;
         }
+      }
 
-        // --- DATA PROCESSING (EXTRACTING TEMPERATURES) ---
-        function processLine(line) {
-            // Uncomment the next line if you want to see every single message arrive in the black box
-            logDebug("RX: " + line);
+      function getHeatMapColor(value) {
+        if (value < 15) return "#d1d5db"; // Grey if idle
+        const normalized = value / 255;
+        // 120 (Green) -> 0 (Red)
+        const hue = 120 - normalized * 120;
+        return `hsl(${hue}, 100%, 50%)`;
+      }
 
-            // Regex: looks for "Ref(Room): 24.50 | Shirt: 32.10"
-            const regex = /Ref\(Room\):\s*([\d\.\-]+)\s*\|\s*Shirt:\s*([\d\.\-]+)/;
-            const match = line.match(regex);
-
-            if (match) {
-                const refTemp = parseFloat(match[1]);
-                let rawShirtTemp = parseFloat(match[2]);
-
-                // Smoothing Array Logic
-                shirtReadings.push(rawShirtTemp);
-                if (shirtReadings.length > SMOOTHING_WINDOW) shirtReadings.shift();
-
-                const sum = shirtReadings.reduce((a, b) => a + b, 0);
-                const avgShirtTemp = (sum / shirtReadings.length).toFixed(1);
-
-                // Save to History for the CSV Download
-                dataHistory.push({ time: new Date().toLocaleTimeString(), room: refTemp, shirt: avgShirtTemp });
-                
-                // Update the Screen and Chart
-                updateUI(refTemp, avgShirtTemp);
-                
-                // Every 20th successful read, post a tiny heartbeat to the debug log just so we know it's alive
-                if (Math.random() > 0.95) logDebug("Parsed successfully: " + avgShirtTemp + "°C");
-            } else {
-                // If it received something but couldn't understand it, warn us.
-                if (line.includes("Ref") || line.includes("Shirt")) {
-                     logDebug("Malformed data ignored: " + line);
-                }
-            }
+      function resetColors() {
+        for (let i = 0; i < 16; i++) {
+          const zoneEl = document.getElementById(`zone-${i}`);
+          if (zoneEl) zoneEl.style.fill = "#d1d5db";
+          const heatEl = document.getElementById(`heat-${i}`);
+          if (heatEl) {
+            heatEl.style.fill = "transparent";
+            heatEl.style.opacity = 0;
+          }
         }
-
-        // --- UPDATE VISUALS ---
-        function updateUI(ref, avgShirt) {
-            document.getElementById('tempValue').innerText = avgShirt;
-            document.getElementById('refValue').innerText = ref;
-
-            chart.data.datasets[0].data.push(avgShirt);
-            if (chart.data.datasets[0].data.length > 50) chart.data.datasets[0].data.shift(); 
-            chart.update();
-        }
-
-        function updateStatus(msg, color) {
-            const el = document.getElementById('statusText');
-            el.innerText = msg;
-            el.style.color = color;
-        }
-
-        // --- EXPORT FUNCTIONS ---
-        function downloadCSV() {
-            if(dataHistory.length === 0) { alert("No data to save!"); return; }
-            let csvContent = "data:text/csv;charset=utf-8,Time,Room Temp,Shirt Temp\n";
-            dataHistory.forEach(row => { csvContent += `${row.time},${row.room},${row.shirt}\n`; });
-            const link = document.createElement("a");
-            link.setAttribute("href", encodeURI(csvContent));
-            link.setAttribute("download", "shirt_data.csv");
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        }
-
-        function downloadPlot() {
-            const link = document.createElement('a');
-            link.download = 'shirt_plot.png';
-            link.href = document.getElementById('tempChart').toDataURL('image/png', 1.0);
-            link.click();
-        }
+        document.getElementById("cop-marker").style.opacity = 0;
+        rawDisplay.innerHTML = "";
+      }
     </script>
-</body>
+  </body>
 </html>
