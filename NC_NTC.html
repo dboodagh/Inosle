@@ -14,7 +14,7 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding: 40px;
+            padding: 20px;
         }
         h1 { margin-bottom: 20px; color: #2c3e50; }
         
@@ -26,7 +26,7 @@
             text-align: center;
             width: 100%;
             max-width: 500px;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
         }
 
         .temp-display {
@@ -89,10 +89,11 @@
         /* Debug Box */
         #debugLog {
             margin-top: 20px;
-            width: 100%; max-width: 900px; height: 100px;
-            background-color: #222; color: #0f0;
-            font-family: monospace; font-size: 0.8rem;
-            padding: 10px; overflow-y: scroll; border-radius: 8px;
+            width: 100%; max-width: 900px; height: 150px;
+            background-color: #1e1e1e; color: #00ff00;
+            font-family: monospace; font-size: 0.85rem;
+            padding: 15px; overflow-y: scroll; border-radius: 8px;
+            border: 2px solid #333;
         }
     </style>
 </head>
@@ -135,7 +136,9 @@
         let shirtReadings = [];
         let dataHistory = []; 
         let chart;
-        let bleBuffer = "";
+        
+        // --- NEW BLUETOOTH BUFFER ---
+        let bleBuffer = ""; // This holds incomplete packets so they can be glued together!
         
         // --- NORDIC UART SERVICE UUIDs (Standard for Adafruit Bluefruit) ---
         const SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
@@ -186,9 +189,11 @@
         document.getElementById('btnCsv').addEventListener('click', downloadCSV);
         document.getElementById('btnImg').addEventListener('click', downloadPlot);
 
+        // --- DEBUG LOGGING HELPER ---
         function logDebug(msg) {
             const el = document.getElementById('debugLog');
-            el.innerText = `[${new Date().toLocaleTimeString()}] ${msg}\n` + el.innerText.substring(0, 500);
+            // Adds the newest message to the top
+            el.innerText = `[${new Date().toLocaleTimeString()}] ${msg}\n` + el.innerText.substring(0, 1500);
         }
 
         // --- USB CONNECTION ---
@@ -196,10 +201,9 @@
             if ("serial" in navigator) {
                 try {
                     port = await navigator.serial.requestPort();
-                    // Critical for nRF52 USB: disable flow control
                     await port.open({ baudRate: 115200, flowControl: "none" }); 
                     updateStatus("USB Connected", "#3498db");
-                    logDebug("USB Connected");
+                    logDebug("USB Connected successfully.");
                     readLoopUSB();
                 } catch (err) { alert("USB Error: " + err); }
             } else { alert("Web Serial not supported."); }
@@ -209,17 +213,19 @@
             const textDecoder = new TextDecoderStream();
             const readableStreamClosed = port.readable.pipeTo(textDecoder.writable);
             reader = textDecoder.readable.getReader();
-            let buffer = "";
+            let usbBuffer = "";
             try {
                 while (true) {
                     const { value, done } = await reader.read();
                     if (done) break;
-                    buffer += value;
-                    let lines = buffer.split('\n');
-                    buffer = lines.pop(); 
-                    for (const line of lines) processLine(line);
+                    usbBuffer += value;
+                    let lines = usbBuffer.split('\n');
+                    usbBuffer = lines.pop(); 
+                    for (const line of lines) {
+                        processLine(line.trim());
+                    }
                 }
-            } catch (error) { console.error(error); }
+            } catch (error) { console.error(error); logDebug("USB Read Error: " + error); }
         }
 
         // --- BLUETOOTH CONNECTION ---
@@ -228,69 +234,100 @@
             try {
                 logDebug("Requesting BLE Device...");
                 bluetoothDevice = await navigator.bluetooth.requestDevice({
-                    filters: [{ services: [SERVICE_UUID] }] // Filter by UUID is most reliable
+                    filters: [{ services: [SERVICE_UUID] }] 
                 });
                 
                 updateStatus("Connecting BLE...", "#f39c12");
                 const server = await bluetoothDevice.gatt.connect();
                 const service = await server.getPrimaryService(SERVICE_UUID);
+                
+                // Get the TX Characteristic (The one the Arduino sends data on)
                 bleCharacteristic = await service.getCharacteristic(CHAR_UUID_TX);
                 
+                // Start listening for data
                 await bleCharacteristic.startNotifications();
                 bleCharacteristic.addEventListener('characteristicvaluechanged', handleBLEData);
                 
                 updateStatus("Bluetooth Connected", "#9b59b6");
-                logDebug("BLE Connected & Listening");
+                logDebug("BLE Connected & Listening for Data!");
+
+                // Handle unexpected disconnects
+                bluetoothDevice.addEventListener('gattserverdisconnected', () => {
+                    updateStatus("Disconnected", "#e74c3c");
+                    logDebug("BLE Device Disconnected.");
+                });
+
             } catch (error) {
                 console.log(error);
-                if (!error.toString().includes("User cancelled")) alert("BLE Error: " + error);
+                if (!error.toString().includes("User cancelled")) {
+                    alert("BLE Error: " + error);
+                    logDebug("BLE Error: " + error);
+                }
             }
         }
 
+        // --- BLUETOOTH DATA HANDLER (WITH CHUNKING FIX) ---
         function handleBLEData(event) {
             const value = event.target.value;
             const decoder = new TextDecoder('utf-8');
             const chunk = decoder.decode(value);
             
-            // 1. Add the incoming chunk to our buffer
+            // Add the new chunk of text to our global buffer
             bleBuffer += chunk;
             
-            // 2. Split the buffer by the newline character (\n)
+            // Split by newline to find complete sentences
             let lines = bleBuffer.split('\n');
             
-            // 3. Keep the last incomplete chunk in the buffer for the next transmission
+            // The last item in the array is either empty (if it ended perfectly with \n) 
+            // or an incomplete piece of the next message. We save it back to the buffer.
             bleBuffer = lines.pop(); 
             
-            // 4. Process all complete lines
-            for (const line of lines) {
-                processLine(line);
+            // Process all the complete lines we found
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (line.length > 0) {
+                    processLine(line);
+                }
             }
         }
 
-        // --- DATA PROCESSING ---
+        // --- DATA PROCESSING (EXTRACTING TEMPERATURES) ---
         function processLine(line) {
-            // Regex: "Ref(Room): 24.50 | Shirt: 32.10"
-            const regex = /Ref\(Room\):\s*([\d\.]+)\s*\|\s*Shirt:\s*([\d\.]+)/;
+            // Uncomment the next line if you want to see every single message arrive in the black box
+            // logDebug("RX: " + line);
+
+            // Regex: looks for "Ref(Room): 24.50 | Shirt: 32.10"
+            const regex = /Ref\(Room\):\s*([\d\.\-]+)\s*\|\s*Shirt:\s*([\d\.\-]+)/;
             const match = line.match(regex);
 
             if (match) {
                 const refTemp = parseFloat(match[1]);
                 let rawShirtTemp = parseFloat(match[2]);
 
-                // Smoothing
+                // Smoothing Array Logic
                 shirtReadings.push(rawShirtTemp);
                 if (shirtReadings.length > SMOOTHING_WINDOW) shirtReadings.shift();
 
                 const sum = shirtReadings.reduce((a, b) => a + b, 0);
                 const avgShirtTemp = (sum / shirtReadings.length).toFixed(1);
 
-                // Save History
+                // Save to History for the CSV Download
                 dataHistory.push({ time: new Date().toLocaleTimeString(), room: refTemp, shirt: avgShirtTemp });
                 
+                // Update the Screen and Chart
                 updateUI(refTemp, avgShirtTemp);
+                
+                // Every 20th successful read, post a tiny heartbeat to the debug log just so we know it's alive
+                if (Math.random() > 0.95) logDebug("Parsed successfully: " + avgShirtTemp + "°C");
+            } else {
+                // If it received something but couldn't understand it, warn us.
+                if (line.includes("Ref") || line.includes("Shirt")) {
+                     logDebug("Malformed data ignored: " + line);
+                }
             }
         }
 
+        // --- UPDATE VISUALS ---
         function updateUI(ref, avgShirt) {
             document.getElementById('tempValue').innerText = avgShirt;
             document.getElementById('refValue').innerText = ref;
