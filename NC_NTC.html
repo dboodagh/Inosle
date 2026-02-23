@@ -135,6 +135,7 @@
         let shirtReadings = [];
         let dataHistory = []; 
         let chart;
+        let bleBuffer = "";
         
         // --- NORDIC UART SERVICE UUIDs (Standard for Adafruit Bluefruit) ---
         const SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
@@ -249,8 +250,21 @@
         function handleBLEData(event) {
             const value = event.target.value;
             const decoder = new TextDecoder('utf-8');
-            const line = decoder.decode(value);
-            processLine(line);
+            const chunk = decoder.decode(value);
+            
+            // 1. Add the incoming chunk to our buffer
+            bleBuffer += chunk;
+            
+            // 2. Split the buffer by the newline character (\n)
+            let lines = bleBuffer.split('\n');
+            
+            // 3. Keep the last incomplete chunk in the buffer for the next transmission
+            bleBuffer = lines.pop(); 
+            
+            // 4. Process all complete lines
+            for (const line of lines) {
+                processLine(line);
+            }
         }
 
         // --- DATA PROCESSING ---
