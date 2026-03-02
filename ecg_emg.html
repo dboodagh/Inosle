@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live ECG Monitor</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #1e1e1e;
+            color: #ffffff;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            max-width: 1000px;
+            margin-bottom: 20px;
+        }
+        button {
+            background-color: #007acc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #005f9e;
+        }
+        button:disabled {
+            background-color: #555;
+            cursor: not-allowed;
+        }
+        canvas {
+            background-color: #000000;
+            border: 2px solid #333;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        .instructions {
+            margin-top: 20px;
+            font-size: 14px;
+            color: #aaaaaa;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h2>Live ECG Monitor</h2>
+        <div>
+            <button id="connectBtn">Connect to Device</button>
+            <button id="disconnectBtn" disabled>Disconnect</button>
+        </div>
+    </div>
+
+    <canvas id="ecgCanvas" width="1000" height="400"></canvas>
+
+    <div class="instructions">
+        <p>Make sure your Arduino IDE Serial Monitor/Plotter is <strong>closed</strong> before connecting.</p>
+        <p>Requires Google Chrome or Microsoft Edge (Web Serial API support).</p>
+    </div>
+
+    <script>
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const canvas = document.getElementById('ecgCanvas');
+        const ctx = canvas.getContext('2d');
+
+        let port;
+        let reader;
+        let keepReading = false;
+
+        // Plotting variables
+        const maxSamples = 1000; // 2 seconds of data at 500Hz
+        let ecgBuffer = new Array(maxSamples).fill(0);
+        let qrsBuffer = new Array(maxSamples).fill(0);
+        let minVal = -500; // Starting Y-axis scale estimates
+        let maxVal = 500;
+
+        // Serial connection logic
+        connectBtn.addEventListener('click', async () => {
+            try {
+                // Request access to the serial port
+                port = await navigator.serial.requestPort();
+                // Open with the same baud rate as your Arduino code
+                await port.open({ baudRate: 115200 });
+
+                connectBtn.disabled = true;
+                disconnectBtn.disabled = false;
+                keepReading = true;
+
+                readLoop();
+                requestAnimationFrame(drawCanvas);
+            } catch (err) {
+                console.error('Error connecting:', err);
+                alert("Failed to connect. Make sure the serial port isn't in use by the Arduino IDE.");
+            }
+        });
+
+        disconnectBtn.addEventListener('click', async () => {
+            keepReading = false;
+            if (reader) {
+                await reader.cancel();
+            }
+            connectBtn.disabled = false;
+            disconnectBtn.disabled = true;
+        });
+
+        async function readLoop() {
+            const textDecoder = new TextDecoderStream();
+            const readableStreamClosed = port.readable.pipeTo(textDecoder.writable);
+            reader = textDecoder.readable.getReader();
+
+            let incomingData = "";
+
+            try {
+                while (keepReading) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    
+                    incomingData += value;
+                    const lines = incomingData.split('\n');
+                    
+                    // Keep the last partial line in the buffer
+                    incomingData = lines.pop();
+
+                    for (const line of lines) {
+                        const parts = line.split(',');
+                        if (parts.length === 2) {
+                            const ecgValue = parseFloat(parts[0]);
+                            const qrsMarker = parseFloat(parts[1]);
+
+                            if (!isNaN(ecgValue) && !isNaN(qrsMarker)) {
+                                ecgBuffer.push(ecgValue);
+                                qrsBuffer.push(qrsMarker);
+                                
+                                // Keep buffers at the max size
+                                if (ecgBuffer.length > maxSamples) {
+                                    ecgBuffer.shift();
+                                    qrsBuffer.shift();
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error("Read error:", error);
+            } finally {
+                reader.releaseLock();
+                await port.close();
+            }
+        }
+
+        // High-performance drawing loop
+        function drawCanvas() {
+            if (!keepReading) return; // Stop drawing if disconnected
+
+            // Auto-scale Y-axis based on recent data to keep the signal visible
+            const currentMin = Math.min(...ecgBuffer);
+            const currentMax = Math.max(...ecgBuffer);
+            
+            // Smoothly adjust min/max for a stable view
+            minVal = minVal * 0.95 + currentMin * 0.05;
+            maxVal = maxVal * 0.95 + currentMax * 0.05;
+            
+            const range = (maxVal - minVal) || 1; // Prevent division by zero
+            const height = canvas.height;
+            const width = canvas.width;
+            const stepX = width / maxSamples;
+
+            ctx.clearRect(0, 0, width, height);
+
+            // Draw grid lines (optional, for aesthetics)
+            ctx.strokeStyle = '#222';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            for(let i=0; i<height; i+=40) { ctx.moveTo(0, i); ctx.lineTo(width, i); }
+            for(let i=0; i<width; i+=40) { ctx.moveTo(i, 0); ctx.lineTo(i, height); }
+            ctx.stroke();
+
+            // Draw ECG Signal
+            ctx.strokeStyle = '#00ff00'; // Classic ECG Green
+            ctx.lineWidth = 2;
+            ctx.lineJoin = 'round';
+            ctx.beginPath();
+
+            for (let i = 0; i < maxSamples; i++) {
+                const x = i * stepX;
+                // Map the value to the canvas height
+                const normalizedY = (ecgBuffer[i] - minVal) / range;
+                // Invert Y because canvas 0 is at the top
+                const y = height - (normalizedY * height);
+
+                if (i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            }
+            ctx.stroke();
+
+            // Draw QRS Markers (Spikes)
+            ctx.fillStyle = 'rgba(255, 0, 0, 0.5)'; // Semi-transparent red
+            for (let i = 0; i < maxSamples; i++) {
+                if (qrsBuffer[i] > 0) {
+                    const x = i * stepX;
+                    ctx.fillRect(x - 2, 0, 4, height); // Draw a vertical bar
+                }
+            }
+
+            requestAnimationFrame(drawCanvas);
+        }
+    </script>
+</body>
+</html>
