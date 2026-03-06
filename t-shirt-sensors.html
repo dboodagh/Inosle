@@ -17,15 +17,18 @@
         }
         .header {
             display: flex;
-            justify-content: space-between;
+            flex-direction: column;
             align-items: center;
             width: 100%;
             max-width: 1000px;
-            margin-bottom: 10px;
+            margin-bottom: 20px;
+            gap: 15px;
         }
         .metrics-bar {
             display: flex;
             gap: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
         }
         .metric-display {
             font-size: 28px;
@@ -34,19 +37,29 @@
             padding: 10px 20px;
             border-radius: 8px;
             border: 1px solid #444;
+            text-align: center;
+        }
+        .metric-label {
+            font-size: 14px;
+            color: #aaa;
+            margin-bottom: 5px;
+            font-weight: normal;
         }
         .bpm-text { color: #ff3366; }
         .temp-text { color: #ff9933; }
+        .room-text { color: #66ccff; }
         
         .btn-group {
             display: flex;
             gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
         }
         button {
             background-color: #007acc;
             color: white;
             border: none;
-            padding: 10px 16px;
+            padding: 12px 18px;
             font-size: 14px;
             font-weight: bold;
             border-radius: 5px;
@@ -55,7 +68,11 @@
         }
         button:hover { background-color: #005f9e; }
         button:disabled { background-color: #444; color: #888; cursor: not-allowed; }
-        .export-btn { background-color: #28a745; }
+        
+        #connectBleBtn { background-color: #6a0dad; }
+        #connectBleBtn:hover { background-color: #550a8b; }
+        
+        .export-btn { background-color: #28a745; padding: 8px 12px; font-size: 12px;}
         .export-btn:hover { background-color: #218838; }
         
         .plot-container {
@@ -76,28 +93,47 @@
             width: 100%;
             height: 200px;
         }
+        .status-text {
+            font-size: 14px;
+            color: #888;
+            margin-top: -10px;
+        }
     </style>
 </head>
 <body>
 
     <div class="header">
-        <h2>Live Biometrics</h2>
+        <h2>Live Biometrics Studio</h2>
+        
         <div class="metrics-bar">
-            <div class="metric-display bpm-text">BPM: <span id="bpmValue">--</span></div>
-            <div class="metric-display temp-text">Temp: <span id="tempValue">--.-</span> °C</div>
+            <div class="metric-display">
+                <div class="metric-label">Heart Rate</div>
+                <div class="bpm-text"><span id="bpmValue">--</span> BPM</div>
+            </div>
+            <div class="metric-display">
+                <div class="metric-label">Body Temp (PTC)</div>
+                <div class="temp-text"><span id="tempValue">--.-</span> °C</div>
+            </div>
+            <div class="metric-display">
+                <div class="metric-label">Reference Room Temp</div>
+                <div class="room-text"><span id="roomValue">--.-</span> °C</div>
+            </div>
         </div>
+
         <div class="btn-group">
-            <button id="connectBtn">Connect Device</button>
+            <button id="connectUsbBtn">🔌 Connect USB (Full Graphs)</button>
+            <button id="connectBleBtn">🔵 Connect BLE (Vitals Only)</button>
             <button id="disconnectBtn" disabled>Disconnect</button>
         </div>
+        <div id="statusText" class="status-text">System Ready. Waiting for connection...</div>
     </div>
 
     <div class="plot-container">
         <div class="plot-header">
-            <h3>Body Temperature (PTC Thermistor) - 60s Window</h3>
+            <h3>Body Temperature Trend - 60s Window</h3>
             <div class="btn-group">
-                <button class="export-btn" id="saveTempCsvBtn">💾 Save Temp CSV</button>
-                <button class="export-btn" id="saveTempPlotBtn">📷 Save Temp Plot</button>
+                <button class="export-btn" id="saveTempCsvBtn">💾 CSV</button>
+                <button class="export-btn" id="saveTempPlotBtn">📷 Plot</button>
             </div>
         </div>
         <canvas id="tempCanvas" width="1000" height="200"></canvas>
@@ -105,10 +141,10 @@
 
     <div class="plot-container">
         <div class="plot-header">
-            <h3>ECG (Heart Activity) - 2s Window</h3>
+            <h3>ECG (Heart) - 2s Window <span style="color:#ff3366; font-size:12px;">(USB Only)</span></h3>
             <div class="btn-group">
-                <button class="export-btn" id="saveEcgCsvBtn">💾 Save ECG CSV</button>
-                <button class="export-btn" id="saveEcgPlotBtn">📷 Save ECG Plot</button>
+                <button class="export-btn" id="saveEcgCsvBtn">💾 CSV</button>
+                <button class="export-btn" id="saveEcgPlotBtn">📷 Plot</button>
             </div>
         </div>
         <canvas id="ecgCanvas" width="1000" height="200"></canvas>
@@ -116,84 +152,85 @@
 
     <div class="plot-container">
         <div class="plot-header">
-            <h3>EMG (Muscle Activity) - Raw (Blue) & Envelope (Orange) - 2s Window</h3>
+            <h3>EMG (Muscle) - 2s Window <span style="color:#ff3366; font-size:12px;">(USB Only)</span></h3>
             <div class="btn-group">
-                <button class="export-btn" id="saveEmgCsvBtn">💾 Save EMG CSV</button>
-                <button class="export-btn" id="saveEmgPlotBtn">📷 Save EMG Plot</button>
+                <button class="export-btn" id="saveEmgCsvBtn">💾 CSV</button>
+                <button class="export-btn" id="saveEmgPlotBtn">📷 Plot</button>
             </div>
         </div>
         <canvas id="emgCanvas" width="1000" height="200"></canvas>
     </div>
 
     <script>
-        const connectBtn = document.getElementById('connectBtn');
+        // UI Elements
+        const connectUsbBtn = document.getElementById('connectUsbBtn');
+        const connectBleBtn = document.getElementById('connectBleBtn');
         const disconnectBtn = document.getElementById('disconnectBtn');
+        const statusText = document.getElementById('statusText');
+        
         const bpmDisplay = document.getElementById('bpmValue');
         const tempDisplay = document.getElementById('tempValue');
+        const roomDisplay = document.getElementById('roomValue');
         
         const tempCtx = document.getElementById('tempCanvas').getContext('2d');
         const ecgCtx = document.getElementById('ecgCanvas').getContext('2d');
         const emgCtx = document.getElementById('emgCanvas').getContext('2d');
 
-        let port;
-        let reader;
+        // State Variables
+        let activeConnection = null; // 'usb' or 'ble'
         let keepReading = false;
         let sessionStartTime = 0;
 
-        // Visual Buffers
-        const maxFastSamples = 1000; // 2 sec at 500Hz for ECG/EMG
+        // USB Variables
+        let port;
+        let reader;
+
+        // BLE Variables (UUIDs mapped from your Arduino code)
+        let bleDevice;
+        let bleCharacteristic;
+        const BLE_SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+        const BLE_CHAR_UUID    = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
+
+        // Buffers
+        const maxFastSamples = 1000; 
         let ecgData = new Array(maxFastSamples).fill(0);
         let qrsData = new Array(maxFastSamples).fill(0);
         let emgAcData = new Array(maxFastSamples).fill(0);
         let emgEnvData = new Array(maxFastSamples).fill(0);
 
-        // Temperature updates much slower (downsampled for a 60-second view)
         const maxSlowSamples = 600; 
         let tempData = new Array(maxSlowSamples).fill(0);
         let tempDownsampleCounter = 0;
 
-        // Auto-scaling trackers
+        // Scaling
         let tempMin = 20, tempMax = 40;
         let ecgMin = -100, ecgMax = 100;
         let emgMin = -0.5, emgMax = 0.5;
 
-        // Background CSV Logs
+        // Logs
         let sessionTempLog = [];
         let sessionEcgLog = [];
         let sessionEmgLog = [];
 
-        connectBtn.addEventListener('click', async () => {
+        // ================= USB CONNECTION =================
+        connectUsbBtn.addEventListener('click', async () => {
             try {
                 port = await navigator.serial.requestPort();
                 await port.open({ baudRate: 115200 });
                 
-                sessionTempLog = [];
-                sessionEcgLog = [];
-                sessionEmgLog = [];
-                sessionStartTime = Date.now();
-
-                connectBtn.disabled = true;
-                disconnectBtn.disabled = false;
-                keepReading = true;
-                
-                readLoop();
+                resetSession('usb');
+                readUsbLoop();
                 requestAnimationFrame(drawPlots);
+                
+                statusText.innerText = "Connected via USB. Receiving full biometric data.";
+                statusText.style.color = "#00ff66";
             } catch (err) {
                 console.error(err);
-                alert("Connection failed. Make sure Arduino IDE is closed.");
+                alert("USB Connection failed.");
             }
         });
 
-        disconnectBtn.addEventListener('click', async () => {
-            keepReading = false;
-            if (reader) await reader.cancel();
-            connectBtn.disabled = false;
-            disconnectBtn.disabled = true;
-            bpmDisplay.innerText = "--";
-            tempDisplay.innerText = "--.-";
-        });
-
-        async function readLoop() {
+        async function readUsbLoop() {
             const textDecoder = new TextDecoderStream();
             port.readable.pipeTo(textDecoder.writable);
             reader = textDecoder.readable.getReader();
@@ -212,7 +249,7 @@
 
                     for (const line of lines) {
                         const parts = line.split(',');
-                        if (parts.length === 6) { // Expecting 6 values now
+                        if (parts.length === 6) {
                             const temp = parseFloat(parts[0]) || 0;
                             const ecg = parseFloat(parts[1]) || 0;
                             const qrs = parseFloat(parts[2]) || 0;
@@ -220,30 +257,22 @@
                             const emgAc = parseFloat(parts[4]) || 0;
                             const emgEnv = parseFloat(parts[5]) || 0;
 
-                            // 1. Fast Updating Buffers (ECG & EMG)
+                            // Fast Buffers (ECG/EMG)
                             ecgData.push(ecg); qrsData.push(qrs);
                             emgAcData.push(emgAc); emgEnvData.push(emgEnv);
-                            
                             ecgData.shift(); qrsData.shift();
                             emgAcData.shift(); emgEnvData.shift();
 
-                            // 2. Slow Updating Buffer (Temperature) - grab 1 sample every 50 loops (10Hz visual update)
+                            // Slow Buffer (Temp) - 10Hz visual update
                             tempDownsampleCounter++;
                             if (tempDownsampleCounter >= 50) {
-                                tempData.push(temp);
-                                tempData.shift();
+                                updateTemperatureUI(temp);
                                 tempDownsampleCounter = 0;
-                                tempDisplay.innerText = temp.toFixed(1);
-                                if (temp > 0) { // Set initial scale quickly
-                                    if(tempMin === 20 && tempMax === 40) {
-                                        tempMin = temp - 2; tempMax = temp + 2;
-                                    }
-                                }
                             }
                             
                             if (bpm > 0) bpmDisplay.innerText = Math.round(bpm);
 
-                            // 3. Log ALL data for CSVs
+                            // Logs
                             sessionTempLog.push(`${now},${temp}`);
                             sessionEcgLog.push(`${now},${ecg},${qrs},${bpm}`);
                             sessionEmgLog.push(`${now},${emgAc},${emgEnv}`);
@@ -256,6 +285,105 @@
             }
         }
 
+        // ================= BLUETOOTH CONNECTION =================
+        connectBleBtn.addEventListener('click', async () => {
+            try {
+                bleDevice = await navigator.bluetooth.requestDevice({
+                    filters: [{ name: 'BioShirt' }],
+                    optionalServices: [BLE_SERVICE_UUID]
+                });
+
+                bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
+
+                statusText.innerText = "Connecting to BLE...";
+                const server = await bleDevice.gatt.connect();
+                const service = await server.getPrimaryService(BLE_SERVICE_UUID);
+                bleCharacteristic = await service.getCharacteristic(BLE_CHAR_UUID);
+                
+                await bleCharacteristic.startNotifications();
+                bleCharacteristic.addEventListener('characteristicvaluechanged', handleBleData);
+                
+                resetSession('ble');
+                requestAnimationFrame(drawPlots);
+                
+                statusText.innerText = "Connected via BLE. Receiving Vitals only.";
+                statusText.style.color = "#66ccff";
+            } catch (error) {
+                console.error(error);
+                alert("Bluetooth Connection failed or cancelled.");
+                statusText.innerText = "System Ready. Waiting for connection...";
+            }
+        });
+
+        function handleBleData(event) {
+            if (!keepReading) return;
+            const value = new TextDecoder().decode(event.target.value);
+            const parts = value.split(',');
+            
+            // Expected BLE format from Arduino: "BPM,Temp,RoomTemp"
+            if (parts.length >= 3) {
+                const bpm = parseFloat(parts[0]);
+                const temp = parseFloat(parts[1]);
+                const roomTemp = parseFloat(parts[2]);
+
+                if (bpm > 0) bpmDisplay.innerText = Math.round(bpm);
+                roomDisplay.innerText = roomTemp.toFixed(1);
+
+                // Update Temp Plot
+                updateTemperatureUI(temp);
+                
+                const now = Date.now() - sessionStartTime;
+                sessionTempLog.push(`${now},${temp}`);
+            }
+        }
+
+        function updateTemperatureUI(temp) {
+            tempData.push(temp);
+            tempData.shift();
+            tempDisplay.innerText = temp.toFixed(1);
+            if (temp > 0 && tempMin === 20 && tempMax === 40) {
+                tempMin = temp - 2; tempMax = temp + 2;
+            }
+        }
+
+        // ================= DISCONNECT & SESSION MGMT =================
+        function resetSession(type) {
+            activeConnection = type;
+            keepReading = true;
+            sessionStartTime = Date.now();
+            sessionTempLog = []; sessionEcgLog = []; sessionEmgLog = [];
+            
+            connectUsbBtn.disabled = true;
+            connectBleBtn.disabled = true;
+            disconnectBtn.disabled = false;
+        }
+
+        disconnectBtn.addEventListener('click', async () => {
+            onDisconnected();
+        });
+
+        async function onDisconnected() {
+            keepReading = false;
+            
+            if (activeConnection === 'usb' && reader) {
+                await reader.cancel();
+            } else if (activeConnection === 'ble' && bleDevice && bleDevice.gatt.connected) {
+                bleDevice.gatt.disconnect();
+            }
+            
+            activeConnection = null;
+            connectUsbBtn.disabled = false;
+            connectBleBtn.disabled = false;
+            disconnectBtn.disabled = true;
+            
+            bpmDisplay.innerText = "--";
+            tempDisplay.innerText = "--.-";
+            roomDisplay.innerText = "--.-";
+            statusText.innerText = "Disconnected. Ready to reconnect.";
+            statusText.style.color = "#888";
+        }
+
+        // ================= DRAWING LOGIC =================
         function drawGrid(ctx, width, height) {
             ctx.strokeStyle = '#222';
             ctx.lineWidth = 1;
@@ -278,7 +406,7 @@
             tempCtx.fillRect(0, 0, width, height);
             drawGrid(tempCtx, width, height);
 
-            const cTempMin = Math.min(...tempData.filter(v => v > 0)); // Ignore initial zeros
+            const cTempMin = Math.min(...tempData.filter(v => v > 0)); 
             const cTempMax = Math.max(...tempData.filter(v => v > 0));
             if(cTempMin < Infinity && cTempMax > -Infinity) {
                 tempMin = tempMin * 0.99 + (cTempMin - 1) * 0.01;
@@ -290,79 +418,85 @@
             tempCtx.lineWidth = 3;
             tempCtx.beginPath();
             for (let i = 0; i < maxSlowSamples; i++) {
-                if (tempData[i] === 0) continue; // Skip unpopulated data at start
+                if (tempData[i] === 0) continue; 
                 const x = i * slowStepX;
                 const y = height - (((tempData[i] - tempMin) / tempRange) * height);
                 i === 0 ? tempCtx.moveTo(x, y) : tempCtx.lineTo(x, y);
             }
             tempCtx.stroke();
 
-            // --- Draw ECG ---
+            // --- Draw ECG & EMG (Only if USB is connected) ---
             ecgCtx.fillStyle = '#000000';
             ecgCtx.fillRect(0, 0, width, height);
             drawGrid(ecgCtx, width, height);
-
-            const cEcgMin = Math.min(...ecgData);
-            const cEcgMax = Math.max(...ecgData);
-            ecgMin = ecgMin * 0.95 + cEcgMin * 0.05;
-            ecgMax = ecgMax * 0.95 + cEcgMax * 0.05;
-            const ecgRange = (ecgMax - ecgMin) || 1;
-
-            ecgCtx.fillStyle = 'rgba(255, 51, 102, 0.3)';
-            for (let i = 0; i < maxFastSamples; i++) {
-                if (qrsData[i] > 0) ecgCtx.fillRect(i * fastStepX - 2, 0, 4, height);
-            }
-
-            ecgCtx.strokeStyle = '#00ff66';
-            ecgCtx.lineWidth = 2;
-            ecgCtx.beginPath();
-            for (let i = 0; i < maxFastSamples; i++) {
-                const x = i * fastStepX;
-                const y = height - (((ecgData[i] - ecgMin) / ecgRange) * height);
-                i === 0 ? ecgCtx.moveTo(x, y) : ecgCtx.lineTo(x, y);
-            }
-            ecgCtx.stroke();
-
-            // --- Draw EMG ---
+            
             emgCtx.fillStyle = '#000000';
             emgCtx.fillRect(0, 0, width, height);
             drawGrid(emgCtx, width, height);
 
-            const cEmgMin = Math.min(...emgAcData);
-            const cEmgMax = Math.max(...emgAcData);
-            emgMin = Math.min(-0.2, emgMin * 0.95 + cEmgMin * 0.05);
-            emgMax = Math.max(0.2, emgMax * 0.95 + cEmgMax * 0.05);
-            const emgRange = (emgMax - emgMin) || 1;
+            if (activeConnection === 'usb') {
+                // ECG
+                const cEcgMin = Math.min(...ecgData);
+                const cEcgMax = Math.max(...ecgData);
+                ecgMin = ecgMin * 0.95 + cEcgMin * 0.05;
+                ecgMax = ecgMax * 0.95 + cEcgMax * 0.05;
+                const ecgRange = (ecgMax - ecgMin) || 1;
 
-            emgCtx.strokeStyle = '#3399ff'; 
-            emgCtx.lineWidth = 1.5;
-            emgCtx.beginPath();
-            for (let i = 0; i < maxFastSamples; i++) {
-                const x = i * fastStepX;
-                const y = height - (((emgAcData[i] - emgMin) / emgRange) * height);
-                i === 0 ? emgCtx.moveTo(x, y) : emgCtx.lineTo(x, y);
-            }
-            emgCtx.stroke();
+                ecgCtx.fillStyle = 'rgba(255, 51, 102, 0.3)';
+                for (let i = 0; i < maxFastSamples; i++) {
+                    if (qrsData[i] > 0) ecgCtx.fillRect(i * fastStepX - 2, 0, 4, height);
+                }
 
-            emgCtx.strokeStyle = '#ffcc00'; 
-            emgCtx.lineWidth = 3;
-            emgCtx.beginPath();
-            for (let i = 0; i < maxFastSamples; i++) {
-                const x = i * fastStepX;
-                const y = height - (((emgEnvData[i] - emgMin) / emgRange) * height);
-                i === 0 ? emgCtx.moveTo(x, y) : emgCtx.lineTo(x, y);
+                ecgCtx.strokeStyle = '#00ff66';
+                ecgCtx.lineWidth = 2;
+                ecgCtx.beginPath();
+                for (let i = 0; i < maxFastSamples; i++) {
+                    const x = i * fastStepX;
+                    const y = height - (((ecgData[i] - ecgMin) / ecgRange) * height);
+                    i === 0 ? ecgCtx.moveTo(x, y) : ecgCtx.lineTo(x, y);
+                }
+                ecgCtx.stroke();
+
+                // EMG
+                const cEmgMin = Math.min(...emgAcData);
+                const cEmgMax = Math.max(...emgAcData);
+                emgMin = Math.min(-0.2, emgMin * 0.95 + cEmgMin * 0.05);
+                emgMax = Math.max(0.2, emgMax * 0.95 + cEmgMax * 0.05);
+                const emgRange = (emgMax - emgMin) || 1;
+
+                emgCtx.strokeStyle = '#3399ff'; 
+                emgCtx.lineWidth = 1.5;
+                emgCtx.beginPath();
+                for (let i = 0; i < maxFastSamples; i++) {
+                    const x = i * fastStepX;
+                    const y = height - (((emgAcData[i] - emgMin) / emgRange) * height);
+                    i === 0 ? emgCtx.moveTo(x, y) : emgCtx.lineTo(x, y);
+                }
+                emgCtx.stroke();
+
+                emgCtx.strokeStyle = '#ffcc00'; 
+                emgCtx.lineWidth = 3;
+                emgCtx.beginPath();
+                for (let i = 0; i < maxFastSamples; i++) {
+                    const x = i * fastStepX;
+                    const y = height - (((emgEnvData[i] - emgMin) / emgRange) * height);
+                    i === 0 ? emgCtx.moveTo(x, y) : emgCtx.lineTo(x, y);
+                }
+                emgCtx.stroke();
+            } else {
+                // Dim the disabled plots
+                ecgCtx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+                ecgCtx.fillText("Bluetooth Mode Active. USB required for high-speed ECG graphs.", width / 2 - 150, height / 2);
+                emgCtx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+                emgCtx.fillText("Bluetooth Mode Active. USB required for high-speed EMG graphs.", width / 2 - 150, height / 2);
             }
-            emgCtx.stroke();
 
             requestAnimationFrame(drawPlots);
         }
 
         // ================= EXPORT =================
-
         function downloadCSV(filename, header, dataArray) {
-            if (dataArray.length === 0) {
-                alert("No data collected yet."); return;
-            }
+            if (dataArray.length === 0) { alert("No data collected yet."); return; }
             const blob = new Blob([header + "\n" + dataArray.join("\n")], { type: 'text/csv' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
@@ -375,12 +509,10 @@
             a.download = filename; a.click();
         }
 
-        // CSV Buttons
         document.getElementById('saveTempCsvBtn').addEventListener('click', () => downloadCSV('temp_data.csv', 'Timestamp_ms,Temperature_C', sessionTempLog));
         document.getElementById('saveEcgCsvBtn').addEventListener('click', () => downloadCSV('ecg_data.csv', 'Timestamp_ms,Filtered_ECG,QRS_Marker,BPM', sessionEcgLog));
         document.getElementById('saveEmgCsvBtn').addEventListener('click', () => downloadCSV('emg_data.csv', 'Timestamp_ms,EMG_AC_Volts,EMG_Envelope_Volts', sessionEmgLog));
 
-        // Image Buttons
         document.getElementById('saveTempPlotBtn').addEventListener('click', () => downloadImage('tempCanvas', 'temp_plot.png'));
         document.getElementById('saveEcgPlotBtn').addEventListener('click', () => downloadImage('ecgCanvas', 'ecg_plot.png'));
         document.getElementById('saveEmgPlotBtn').addEventListener('click', () => downloadImage('emgCanvas', 'emg_plot.png'));
