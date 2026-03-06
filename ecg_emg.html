@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Biometrics Dashboard (With Export)</title>
+    <title>Biometrics Dashboard</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -32,39 +32,27 @@
             border-radius: 8px;
             border: 1px solid #444;
         }
-        .btn-group {
-            display: flex;
-            gap: 10px;
-        }
         button {
             background-color: #007acc;
             color: white;
             border: none;
-            padding: 10px 16px;
-            font-size: 14px;
+            padding: 12px 24px;
+            font-size: 16px;
             font-weight: bold;
             border-radius: 5px;
             cursor: pointer;
-            transition: background-color 0.2s;
         }
         button:hover { background-color: #005f9e; }
         button:disabled { background-color: #444; color: #888; cursor: not-allowed; }
-        .export-btn { background-color: #28a745; }
-        .export-btn:hover { background-color: #218838; }
         
         .plot-container {
             width: 100%;
             max-width: 1000px;
             margin-bottom: 20px;
         }
-        .plot-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 5px;
-        }
-        h3 { margin: 0; color: #ccc; font-size: 16px; }
+        h3 { margin: 0 0 5px 0; color: #ccc; font-size: 16px; }
         canvas {
+            background-color: #000000;
             border: 2px solid #333;
             border-radius: 8px;
             width: 100%;
@@ -77,31 +65,19 @@
     <div class="header">
         <h2>Live Biometrics</h2>
         <div class="bpm-display">BPM: <span id="bpmValue">--</span></div>
-        <div class="btn-group">
+        <div>
             <button id="connectBtn">Connect Device</button>
             <button id="disconnectBtn" disabled>Disconnect</button>
         </div>
     </div>
 
     <div class="plot-container">
-        <div class="plot-header">
-            <h3>ECG (Heart)</h3>
-            <div class="btn-group">
-                <button class="export-btn" id="saveEcgCsvBtn">💾 Save ECG CSV</button>
-                <button class="export-btn" id="saveEcgPlotBtn">📷 Save ECG Plot</button>
-            </div>
-        </div>
+        <h3>ECG (Heart)</h3>
         <canvas id="ecgCanvas" width="1000" height="250"></canvas>
     </div>
 
     <div class="plot-container">
-        <div class="plot-header">
-            <h3>EMG (Muscle Activity) - Raw (Blue) & Envelope (Orange)</h3>
-            <div class="btn-group">
-                <button class="export-btn" id="saveEmgCsvBtn">💾 Save EMG CSV</button>
-                <button class="export-btn" id="saveEmgPlotBtn">📷 Save EMG Plot</button>
-            </div>
-        </div>
+        <h3>EMG (Muscle Activity) - Raw (Blue) & Envelope (Orange)</h3>
         <canvas id="emgCanvas" width="1000" height="250"></canvas>
     </div>
 
@@ -110,18 +86,16 @@
         const disconnectBtn = document.getElementById('disconnectBtn');
         const bpmDisplay = document.getElementById('bpmValue');
         
-        const ecgCanvas = document.getElementById('ecgCanvas');
-        const emgCanvas = document.getElementById('emgCanvas');
-        const ecgCtx = ecgCanvas.getContext('2d');
-        const emgCtx = emgCanvas.getContext('2d');
+        const ecgCtx = document.getElementById('ecgCanvas').getContext('2d');
+        const emgCtx = document.getElementById('emgCanvas').getContext('2d');
 
         let port;
         let reader;
         let keepReading = false;
-        let sessionStartTime = 0;
 
-        // Visual Rolling Buffers (only holds the last 2 seconds for the screen)
-        const maxSamples = 1000; 
+        const maxSamples = 1000; // 2 seconds at 500Hz
+        
+        // Data arrays
         let ecgData = new Array(maxSamples).fill(0);
         let qrsData = new Array(maxSamples).fill(0);
         let emgAcData = new Array(maxSamples).fill(0);
@@ -131,24 +105,13 @@
         let ecgMin = -100, ecgMax = 100;
         let emgMin = -0.5, emgMax = 0.5;
 
-        // --- EXPORT DATA LOGS (holds entire session) ---
-        let sessionEcgLog = [];
-        let sessionEmgLog = [];
-
         connectBtn.addEventListener('click', async () => {
             try {
                 port = await navigator.serial.requestPort();
                 await port.open({ baudRate: 115200 });
-                
-                // Reset logs for new session
-                sessionEcgLog = [];
-                sessionEmgLog = [];
-                sessionStartTime = Date.now();
-
                 connectBtn.disabled = true;
                 disconnectBtn.disabled = false;
                 keepReading = true;
-                
                 readLoop();
                 requestAnimationFrame(drawPlots);
             } catch (err) {
@@ -180,31 +143,22 @@
                     const lines = incomingData.split('\n');
                     incomingData = lines.pop(); // Keep partial line
 
-                    const now = Date.now() - sessionStartTime;
-
                     for (const line of lines) {
                         const parts = line.split(',');
                         if (parts.length === 5) {
-                            const ecg = parseFloat(parts[0]) || 0;
-                            const qrs = parseFloat(parts[1]) || 0;
-                            const bpm = parseFloat(parts[2]) || 0;
-                            const emgAc = parseFloat(parts[3]) || 0;
-                            const emgEnv = parseFloat(parts[4]) || 0;
-
-                            // 1. Update Visual Buffers
-                            ecgData.push(ecg);
-                            qrsData.push(qrs);
-                            emgAcData.push(emgAc);
-                            emgEnvData.push(emgEnv);
+                            ecgData.push(parseFloat(parts[0]) || 0);
+                            qrsData.push(parseFloat(parts[1]) || 0);
                             
-                            ecgData.shift(); qrsData.shift();
-                            emgAcData.shift(); emgEnvData.shift();
-                            
+                            // Update BPM UI
+                            const bpm = parseFloat(parts[2]);
                             if (bpm > 0) bpmDisplay.innerText = Math.round(bpm);
 
-                            // 2. Log to Background Data Arrays for CSV
-                            sessionEcgLog.push(`${now},${ecg},${qrs},${bpm}`);
-                            sessionEmgLog.push(`${now},${emgAc},${emgEnv}`);
+                            emgAcData.push(parseFloat(parts[3]) || 0);
+                            emgEnvData.push(parseFloat(parts[4]) || 0);
+                            
+                            // Maintain array sizes
+                            ecgData.shift(); qrsData.shift();
+                            emgAcData.shift(); emgEnvData.shift();
                         }
                     }
                 }
@@ -231,9 +185,7 @@
             const stepX = width / maxSamples;
 
             // --- Draw ECG ---
-            // Use solid fill instead of clearRect so saved PNGs aren't transparent
-            ecgCtx.fillStyle = '#000000';
-            ecgCtx.fillRect(0, 0, width, height);
+            ecgCtx.clearRect(0, 0, width, height);
             drawGrid(ecgCtx, width, height);
 
             const cEcgMin = Math.min(...ecgData);
@@ -261,18 +213,18 @@
 
 
             // --- Draw EMG ---
-            emgCtx.fillStyle = '#000000';
-            emgCtx.fillRect(0, 0, width, height);
+            emgCtx.clearRect(0, 0, width, height);
             drawGrid(emgCtx, width, height);
 
             const cEmgMin = Math.min(...emgAcData);
             const cEmgMax = Math.max(...emgAcData);
+            // Lock minimum scale so baseline noise doesn't look huge
             emgMin = Math.min(-0.2, emgMin * 0.95 + cEmgMin * 0.05);
             emgMax = Math.max(0.2, emgMax * 0.95 + cEmgMax * 0.05);
             const emgRange = (emgMax - emgMin) || 1;
 
             // EMG AC (Raw)
-            emgCtx.strokeStyle = '#3399ff'; 
+            emgCtx.strokeStyle = '#3399ff'; // Blue
             emgCtx.lineWidth = 1.5;
             emgCtx.beginPath();
             for (let i = 0; i < maxSamples; i++) {
@@ -283,7 +235,7 @@
             emgCtx.stroke();
 
             // EMG Envelope (Smoothed)
-            emgCtx.strokeStyle = '#ffcc00'; 
+            emgCtx.strokeStyle = '#ffcc00'; // Orange/Yellow
             emgCtx.lineWidth = 3;
             emgCtx.beginPath();
             for (let i = 0; i < maxSamples; i++) {
@@ -295,50 +247,6 @@
 
             requestAnimationFrame(drawPlots);
         }
-
-        // ================= EXPORT FUNCTIONS =================
-
-        function downloadCSV(filename, header, dataArray) {
-            if (dataArray.length === 0) {
-                alert("No data collected yet. Please connect the device first.");
-                return;
-            }
-            const csvContent = header + "\n" + dataArray.join("\n");
-            const blob = new Blob([csvContent], { type: 'text/csv' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            a.click();
-            URL.revokeObjectURL(url);
-        }
-
-        function downloadImage(canvasId, filename) {
-            const canvas = document.getElementById(canvasId);
-            const url = canvas.toDataURL("image/png");
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            a.click();
-        }
-
-        // Button Listeners
-        document.getElementById('saveEcgCsvBtn').addEventListener('click', () => {
-            downloadCSV('ecg_data.csv', 'Timestamp_ms,Filtered_ECG,QRS_Marker,BPM', sessionEcgLog);
-        });
-
-        document.getElementById('saveEmgCsvBtn').addEventListener('click', () => {
-            downloadCSV('emg_data.csv', 'Timestamp_ms,EMG_AC_Volts,EMG_Envelope_Volts', sessionEmgLog);
-        });
-
-        document.getElementById('saveEcgPlotBtn').addEventListener('click', () => {
-            downloadImage('ecgCanvas', 'ecg_plot_snapshot.png');
-        });
-
-        document.getElementById('saveEmgPlotBtn').addEventListener('click', () => {
-            downloadImage('emgCanvas', 'emg_plot_snapshot.png');
-        });
-
     </script>
 </body>
 </html>
