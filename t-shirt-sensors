@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ultimate Biometrics Dashboard</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #121212;
+            color: #ffffff;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            max-width: 1000px;
+            margin-bottom: 10px;
+        }
+        .metrics-bar {
+            display: flex;
+            gap: 20px;
+        }
+        .metric-display {
+            font-size: 28px;
+            font-weight: bold;
+            background: #222;
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: 1px solid #444;
+        }
+        .bpm-text { color: #ff3366; }
+        .temp-text { color: #ff9933; }
+        
+        .btn-group {
+            display: flex;
+            gap: 10px;
+        }
+        button {
+            background-color: #007acc;
+            color: white;
+            border: none;
+            padding: 10px 16px;
+            font-size: 14px;
+            font-weight: bold;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        button:hover { background-color: #005f9e; }
+        button:disabled { background-color: #444; color: #888; cursor: not-allowed; }
+        .export-btn { background-color: #28a745; }
+        .export-btn:hover { background-color: #218838; }
+        
+        .plot-container {
+            width: 100%;
+            max-width: 1000px;
+            margin-bottom: 20px;
+        }
+        .plot-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        h3 { margin: 0; color: #ccc; font-size: 16px; }
+        canvas {
+            border: 2px solid #333;
+            border-radius: 8px;
+            width: 100%;
+            height: 200px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h2>Live Biometrics</h2>
+        <div class="metrics-bar">
+            <div class="metric-display bpm-text">BPM: <span id="bpmValue">--</span></div>
+            <div class="metric-display temp-text">Temp: <span id="tempValue">--.-</span> °C</div>
+        </div>
+        <div class="btn-group">
+            <button id="connectBtn">Connect Device</button>
+            <button id="disconnectBtn" disabled>Disconnect</button>
+        </div>
+    </div>
+
+    <div class="plot-container">
+        <div class="plot-header">
+            <h3>Body Temperature (PTC Thermistor) - 60s Window</h3>
+            <div class="btn-group">
+                <button class="export-btn" id="saveTempCsvBtn">💾 Save Temp CSV</button>
+                <button class="export-btn" id="saveTempPlotBtn">📷 Save Temp Plot</button>
+            </div>
+        </div>
+        <canvas id="tempCanvas" width="1000" height="200"></canvas>
+    </div>
+
+    <div class="plot-container">
+        <div class="plot-header">
+            <h3>ECG (Heart Activity) - 2s Window</h3>
+            <div class="btn-group">
+                <button class="export-btn" id="saveEcgCsvBtn">💾 Save ECG CSV</button>
+                <button class="export-btn" id="saveEcgPlotBtn">📷 Save ECG Plot</button>
+            </div>
+        </div>
+        <canvas id="ecgCanvas" width="1000" height="200"></canvas>
+    </div>
+
+    <div class="plot-container">
+        <div class="plot-header">
+            <h3>EMG (Muscle Activity) - Raw (Blue) & Envelope (Orange) - 2s Window</h3>
+            <div class="btn-group">
+                <button class="export-btn" id="saveEmgCsvBtn">💾 Save EMG CSV</button>
+                <button class="export-btn" id="saveEmgPlotBtn">📷 Save EMG Plot</button>
+            </div>
+        </div>
+        <canvas id="emgCanvas" width="1000" height="200"></canvas>
+    </div>
+
+    <script>
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const bpmDisplay = document.getElementById('bpmValue');
+        const tempDisplay = document.getElementById('tempValue');
+        
+        const tempCtx = document.getElementById('tempCanvas').getContext('2d');
+        const ecgCtx = document.getElementById('ecgCanvas').getContext('2d');
+        const emgCtx = document.getElementById('emgCanvas').getContext('2d');
+
+        let port;
+        let reader;
+        let keepReading = false;
+        let sessionStartTime = 0;
+
+        // Visual Buffers
+        const maxFastSamples = 1000; // 2 sec at 500Hz for ECG/EMG
+        let ecgData = new Array(maxFastSamples).fill(0);
+        let qrsData = new Array(maxFastSamples).fill(0);
+        let emgAcData = new Array(maxFastSamples).fill(0);
+        let emgEnvData = new Array(maxFastSamples).fill(0);
+
+        // Temperature updates much slower (downsampled for a 60-second view)
+        const maxSlowSamples = 600; 
+        let tempData = new Array(maxSlowSamples).fill(0);
+        let tempDownsampleCounter = 0;
+
+        // Auto-scaling trackers
+        let tempMin = 20, tempMax = 40;
+        let ecgMin = -100, ecgMax = 100;
+        let emgMin = -0.5, emgMax = 0.5;
+
+        // Background CSV Logs
+        let sessionTempLog = [];
+        let sessionEcgLog = [];
+        let sessionEmgLog = [];
+
+        connectBtn.addEventListener('click', async () => {
+            try {
+                port = await navigator.serial.requestPort();
+                await port.open({ baudRate: 115200 });
+                
+                sessionTempLog = [];
+                sessionEcgLog = [];
+                sessionEmgLog = [];
+                sessionStartTime = Date.now();
+
+                connectBtn.disabled = true;
+                disconnectBtn.disabled = false;
+                keepReading = true;
+                
+                readLoop();
+                requestAnimationFrame(drawPlots);
+            } catch (err) {
+                console.error(err);
+                alert("Connection failed. Make sure Arduino IDE is closed.");
+            }
+        });
+
+        disconnectBtn.addEventListener('click', async () => {
+            keepReading = false;
+            if (reader) await reader.cancel();
+            connectBtn.disabled = false;
+            disconnectBtn.disabled = true;
+            bpmDisplay.innerText = "--";
+            tempDisplay.innerText = "--.-";
+        });
+
+        async function readLoop() {
+            const textDecoder = new TextDecoderStream();
+            port.readable.pipeTo(textDecoder.writable);
+            reader = textDecoder.readable.getReader();
+            let incomingData = "";
+
+            try {
+                while (keepReading) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    
+                    incomingData += value;
+                    const lines = incomingData.split('\n');
+                    incomingData = lines.pop(); 
+
+                    const now = Date.now() - sessionStartTime;
+
+                    for (const line of lines) {
+                        const parts = line.split(',');
+                        if (parts.length === 6) { // Expecting 6 values now
+                            const temp = parseFloat(parts[0]) || 0;
+                            const ecg = parseFloat(parts[1]) || 0;
+                            const qrs = parseFloat(parts[2]) || 0;
+                            const bpm = parseFloat(parts[3]) || 0;
+                            const emgAc = parseFloat(parts[4]) || 0;
+                            const emgEnv = parseFloat(parts[5]) || 0;
+
+                            // 1. Fast Updating Buffers (ECG & EMG)
+                            ecgData.push(ecg); qrsData.push(qrs);
+                            emgAcData.push(emgAc); emgEnvData.push(emgEnv);
+                            
+                            ecgData.shift(); qrsData.shift();
+                            emgAcData.shift(); emgEnvData.shift();
+
+                            // 2. Slow Updating Buffer (Temperature) - grab 1 sample every 50 loops (10Hz visual update)
+                            tempDownsampleCounter++;
+                            if (tempDownsampleCounter >= 50) {
+                                tempData.push(temp);
+                                tempData.shift();
+                                tempDownsampleCounter = 0;
+                                tempDisplay.innerText = temp.toFixed(1);
+                                if (temp > 0) { // Set initial scale quickly
+                                    if(tempMin === 20 && tempMax === 40) {
+                                        tempMin = temp - 2; tempMax = temp + 2;
+                                    }
+                                }
+                            }
+                            
+                            if (bpm > 0) bpmDisplay.innerText = Math.round(bpm);
+
+                            // 3. Log ALL data for CSVs
+                            sessionTempLog.push(`${now},${temp}`);
+                            sessionEcgLog.push(`${now},${ecg},${qrs},${bpm}`);
+                            sessionEmgLog.push(`${now},${emgAc},${emgEnv}`);
+                        }
+                    }
+                }
+            } finally {
+                reader.releaseLock();
+                await port.close();
+            }
+        }
+
+        function drawGrid(ctx, width, height) {
+            ctx.strokeStyle = '#222';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            for(let i=0; i<height; i+=50) { ctx.moveTo(0, i); ctx.lineTo(width, i); }
+            for(let i=0; i<width; i+=50) { ctx.moveTo(i, 0); ctx.lineTo(i, height); }
+            ctx.stroke();
+        }
+
+        function drawPlots() {
+            if (!keepReading) return;
+
+            const width = 1000;
+            const height = 200;
+            const fastStepX = width / maxFastSamples;
+            const slowStepX = width / maxSlowSamples;
+
+            // --- Draw Temperature ---
+            tempCtx.fillStyle = '#000000';
+            tempCtx.fillRect(0, 0, width, height);
+            drawGrid(tempCtx, width, height);
+
+            const cTempMin = Math.min(...tempData.filter(v => v > 0)); // Ignore initial zeros
+            const cTempMax = Math.max(...tempData.filter(v => v > 0));
+            if(cTempMin < Infinity && cTempMax > -Infinity) {
+                tempMin = tempMin * 0.99 + (cTempMin - 1) * 0.01;
+                tempMax = tempMax * 0.99 + (cTempMax + 1) * 0.01;
+            }
+            const tempRange = (tempMax - tempMin) || 1;
+
+            tempCtx.strokeStyle = '#ff9933';
+            tempCtx.lineWidth = 3;
+            tempCtx.beginPath();
+            for (let i = 0; i < maxSlowSamples; i++) {
+                if (tempData[i] === 0) continue; // Skip unpopulated data at start
+                const x = i * slowStepX;
+                const y = height - (((tempData[i] - tempMin) / tempRange) * height);
+                i === 0 ? tempCtx.moveTo(x, y) : tempCtx.lineTo(x, y);
+            }
+            tempCtx.stroke();
+
+            // --- Draw ECG ---
+            ecgCtx.fillStyle = '#000000';
+            ecgCtx.fillRect(0, 0, width, height);
+            drawGrid(ecgCtx, width, height);
+
+            const cEcgMin = Math.min(...ecgData);
+            const cEcgMax = Math.max(...ecgData);
+            ecgMin = ecgMin * 0.95 + cEcgMin * 0.05;
+            ecgMax = ecgMax * 0.95 + cEcgMax * 0.05;
+            const ecgRange = (ecgMax - ecgMin) || 1;
+
+            ecgCtx.fillStyle = 'rgba(255, 51, 102, 0.3)';
+            for (let i = 0; i < maxFastSamples; i++) {
+                if (qrsData[i] > 0) ecgCtx.fillRect(i * fastStepX - 2, 0, 4, height);
+            }
+
+            ecgCtx.strokeStyle = '#00ff66';
+            ecgCtx.lineWidth = 2;
+            ecgCtx.beginPath();
+            for (let i = 0; i < maxFastSamples; i++) {
+                const x = i * fastStepX;
+                const y = height - (((ecgData[i] - ecgMin) / ecgRange) * height);
+                i === 0 ? ecgCtx.moveTo(x, y) : ecgCtx.lineTo(x, y);
+            }
+            ecgCtx.stroke();
+
+            // --- Draw EMG ---
+            emgCtx.fillStyle = '#000000';
+            emgCtx.fillRect(0, 0, width, height);
+            drawGrid(emgCtx, width, height);
+
+            const cEmgMin = Math.min(...emgAcData);
+            const cEmgMax = Math.max(...emgAcData);
+            emgMin = Math.min(-0.2, emgMin * 0.95 + cEmgMin * 0.05);
+            emgMax = Math.max(0.2, emgMax * 0.95 + cEmgMax * 0.05);
+            const emgRange = (emgMax - emgMin) || 1;
+
+            emgCtx.strokeStyle = '#3399ff'; 
+            emgCtx.lineWidth = 1.5;
+            emgCtx.beginPath();
+            for (let i = 0; i < maxFastSamples; i++) {
+                const x = i * fastStepX;
+                const y = height - (((emgAcData[i] - emgMin) / emgRange) * height);
+                i === 0 ? emgCtx.moveTo(x, y) : emgCtx.lineTo(x, y);
+            }
+            emgCtx.stroke();
+
+            emgCtx.strokeStyle = '#ffcc00'; 
+            emgCtx.lineWidth = 3;
+            emgCtx.beginPath();
+            for (let i = 0; i < maxFastSamples; i++) {
+                const x = i * fastStepX;
+                const y = height - (((emgEnvData[i] - emgMin) / emgRange) * height);
+                i === 0 ? emgCtx.moveTo(x, y) : emgCtx.lineTo(x, y);
+            }
+            emgCtx.stroke();
+
+            requestAnimationFrame(drawPlots);
+        }
+
+        // ================= EXPORT =================
+
+        function downloadCSV(filename, header, dataArray) {
+            if (dataArray.length === 0) {
+                alert("No data collected yet."); return;
+            }
+            const blob = new Blob([header + "\n" + dataArray.join("\n")], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function downloadImage(canvasId, filename) {
+            const a = document.createElement('a');
+            a.href = document.getElementById(canvasId).toDataURL("image/png");
+            a.download = filename; a.click();
+        }
+
+        // CSV Buttons
+        document.getElementById('saveTempCsvBtn').addEventListener('click', () => downloadCSV('temp_data.csv', 'Timestamp_ms,Temperature_C', sessionTempLog));
+        document.getElementById('saveEcgCsvBtn').addEventListener('click', () => downloadCSV('ecg_data.csv', 'Timestamp_ms,Filtered_ECG,QRS_Marker,BPM', sessionEcgLog));
+        document.getElementById('saveEmgCsvBtn').addEventListener('click', () => downloadCSV('emg_data.csv', 'Timestamp_ms,EMG_AC_Volts,EMG_Envelope_Volts', sessionEmgLog));
+
+        // Image Buttons
+        document.getElementById('saveTempPlotBtn').addEventListener('click', () => downloadImage('tempCanvas', 'temp_plot.png'));
+        document.getElementById('saveEcgPlotBtn').addEventListener('click', () => downloadImage('ecgCanvas', 'ecg_plot.png'));
+        document.getElementById('saveEmgPlotBtn').addEventListener('click', () => downloadImage('emgCanvas', 'emg_plot.png'));
+
+    </script>
+</body>
+</html>
