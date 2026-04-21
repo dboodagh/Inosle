@@ -13,14 +13,6 @@
         .toggle-checkbox:checked + .toggle-label { background-color: #4F46E5; }
         .led-glow-green { box-shadow: 0 0 10px #22c55e, 0 0 20px #22c55e inset; }
         .led-glow-red { box-shadow: 0 0 10px #ef4444, 0 0 20px #ef4444 inset; }
-        
-        /* Battery Pulse Animation for Charging */
-        @keyframes pulse-charge {
-            0% { opacity: 0.5; }
-            50% { opacity: 1; }
-            100% { opacity: 0.5; }
-        }
-        .charging-anim { animation: pulse-charge 2s infinite; }
     </style>
 </head>
 <body class="p-4 md:p-8">
@@ -54,7 +46,7 @@
         </div>
 
         <!-- Data Grid -->
-        <div id="data-display" class="grid grid-cols-1 sm:grid-cols-4 gap-6 mb-8">
+        <div id="data-display" class="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
             <!-- Voltage Card -->
             <div class="card bg-white p-6 rounded-xl border border-blue-200 col-span-2 relative overflow-hidden">
                 <div class="flex justify-between items-start mb-2">
@@ -72,26 +64,6 @@
                 <div class="flex items-baseline gap-2">
                     <p id="current-voltage" class="text-4xl font-bold text-blue-600 mt-1">-- V</p>
                     <p id="current-raw" class="text-sm text-gray-400 font-mono">(Raw: ----)</p>
-                </div>
-            </div>
-
-            <!-- Battery Card -->
-            <div class="card bg-white p-6 rounded-xl border border-orange-100">
-                <p class="text-sm font-medium text-gray-500">Battery</p>
-                <div class="flex items-center gap-3 mt-2">
-                    <!-- Battery Icon -->
-                    <div class="relative w-8 h-12 border-2 border-gray-700 rounded-md p-1 flex items-end justify-center">
-                        <div class="absolute -top-1.5 w-4 h-2 bg-gray-700 rounded-t-sm"></div>
-                        <div id="bat-fill" class="w-full bg-green-500 rounded-sm transition-all duration-500" style="height: 0%"></div>
-                        <!-- Lightning Bolt (Charging) -->
-                        <svg id="charge-icon" class="absolute w-6 h-6 text-yellow-400 drop-shadow-md hidden z-10 top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clip-rule="evenodd"></path>
-                        </svg>
-                    </div>
-                    <div>
-                        <p id="bat-pct" class="text-2xl font-bold text-gray-800">--%</p>
-                        <p id="bat-volts" class="text-xs text-gray-500">-- V</p>
-                    </div>
                 </div>
             </div>
 
@@ -127,10 +99,6 @@
         const STATUS_EL = document.getElementById('status-message');
         const VOLTAGE_EL = document.getElementById('current-voltage');
         const RAW_EL = document.getElementById('current-raw');
-        const BAT_PCT_EL = document.getElementById('bat-pct');
-        const BAT_VOLTS_EL = document.getElementById('bat-volts');
-        const BAT_FILL = document.getElementById('bat-fill');
-        const CHARGE_ICON = document.getElementById('charge-icon');
         const EXPORT_BTN = document.getElementById('export-csv-btn');
         const ERROR_BOX = document.getElementById('error-box');
         const ERROR_MSG = document.getElementById('error-message');
@@ -207,10 +175,6 @@
         function resetData() {
             VOLTAGE_EL.textContent = "-- V";
             RAW_EL.textContent = "(Raw: ----)";
-            BAT_PCT_EL.textContent = "--%";
-            BAT_VOLTS_EL.textContent = "-- V";
-            BAT_FILL.style.height = "0%";
-            CHARGE_ICON.classList.add('hidden');
         }
 
         async function disconnectHardware() {
@@ -230,34 +194,10 @@
             });
         }
 
-        function updateBatteryUI(pct, volts, isCharging) {
-            BAT_PCT_EL.textContent = `${pct}%`;
-            BAT_VOLTS_EL.textContent = `${volts.toFixed(2)} V`;
-            BAT_FILL.style.height = `${pct}%`;
-            
-            // Color Logic
-            BAT_FILL.classList.remove('bg-red-500', 'bg-yellow-500', 'bg-green-500');
-            if(pct < 20) BAT_FILL.classList.add('bg-red-500');
-            else if(pct < 50) BAT_FILL.classList.add('bg-yellow-500');
-            else BAT_FILL.classList.add('bg-green-500');
-
-            // Charging Logic
-            if(isCharging) {
-                CHARGE_ICON.classList.remove('hidden');
-                CHARGE_ICON.classList.add('charging-anim');
-            } else {
-                CHARGE_ICON.classList.add('hidden');
-                CHARGE_ICON.classList.remove('charging-anim');
-            }
-        }
-
         function processData(line) {
             if (!POWER_SWITCH.checked) return;
             try {
                 const d = JSON.parse(line);
-                
-                // Always update battery if available
-                if(d.bat_pct !== undefined) updateBatteryUI(d.bat_pct, d.bat_v, d.charging);
 
                 // Only update Voltage/Chart if sensor is enabled in UI
                 if (SENSOR_SWITCH.checked && d.voltage !== undefined) {
@@ -342,8 +282,8 @@
 
         function exportCSV() {
             if (!dataHistory.length) return;
-            const csv = ['Timestamp,Raw,Voltage,Bat_V,Bat_Pct,Charging', 
-                ...dataHistory.map(d => `${d.time},${d.raw},${d.voltage},${d.bat_v},${d.bat_pct},${d.charging}`)
+            const csv = ['Timestamp,Raw,Voltage', 
+                ...dataHistory.map(d => `${d.time},${d.raw},${d.voltage}`)
             ].join('\n');
             const link = document.createElement('a');
             link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
