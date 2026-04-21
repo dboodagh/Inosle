@@ -20,7 +20,7 @@
         <h1 class="text-3xl font-extrabold text-gray-800 mb-2 text-center">
             Sweat Sensor Data Logger
         </h1>
-        <p class="text-center text-gray-600 mb-8">ESP32-C3 (XIAO)</p>
+        <p class="text-center text-gray-600 mb-8">ESP32-S3 (XIAO)</p>
 
         <!-- Power & Connection Controls -->
         <div class="card bg-white p-6 rounded-xl border border-indigo-100 mb-6">
@@ -140,8 +140,6 @@
         
         async function sendCommand(cmd) {
             if (!POWER_SWITCH.checked) return;
-            console.log("Sending Command:", cmd);
-            
             try {
                 // USB Send
                 if (writer) {
@@ -198,7 +196,7 @@
             if (!POWER_SWITCH.checked) return;
             try {
                 const d = JSON.parse(line);
-
+                
                 // Only update Voltage/Chart if sensor is enabled in UI
                 if (SENSOR_SWITCH.checked && d.voltage !== undefined) {
                     const timestamp = new Date();
@@ -270,7 +268,7 @@
                 // Get TX (Write) Char if available
                 try {
                     txChar = await service.getCharacteristic(CHARACTERISTIC_UUID_TX);
-                } catch(e) { console.log("TX Char not found (Old firmware?)"); }
+                } catch(e) { console.log("TX Char not found"); }
 
                 bluetoothDevice.addEventListener('gattserverdisconnected', () => {
                     handlePowerToggle(); // Reset state
