@@ -244,13 +244,16 @@
             
             try {
                 STATUS_EL.textContent = "Requesting Device...";
+                
+                // FIX: acceptAllDevices allows you to see every nearby device,
+                // bypassing OS filtering bugs entirely.
                 bluetoothDevice = await navigator.bluetooth.requestDevice({
-                    filters: [{ services: [SERVICE_UUID] }]
+                    acceptAllDevices: true,
+                    optionalServices: [SERVICE_UUID]
                 });
                 
                 STATUS_EL.textContent = "Connecting to GATT...";
                 
-                // FIX: Add a 7-second timeout to the GATT connection process
                 const connectPromise = bluetoothDevice.gatt.connect();
                 const timeoutPromise = new Promise((_, reject) => {
                     setTimeout(() => reject(new Error("GATT Connection Timeout. Please reset your PC's Bluetooth.")), 7000);
