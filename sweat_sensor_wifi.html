@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 Sweat Sensor Dashboard (WiFi)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f7f9fb; }
+        .card { box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.06); }
+        .toggle-checkbox:checked { right: 0; border-color: #4F46E5; }
+        .toggle-checkbox:checked + .toggle-label { background-color: #4F46E5; }
+        .led-glow-green { box-shadow: 0 0 10px #22c55e, 0 0 20px #22c55e inset; }
+        .led-glow-red { box-shadow: 0 0 10px #ef4444, 0 0 20px #ef4444 inset; }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+    <div id="app" class="max-w-4xl mx-auto">
+        <h1 class="text-3xl font-extrabold text-gray-800 mb-2 text-center">
+            Sweat Sensor Data Logger
+        </h1>
+        <p class="text-center text-gray-600 mb-8">ESP32-S3 (WiFi & USB Edition)</p>
+
+        <!-- Power & Connection Controls -->
+        <div class="card bg-white p-6 rounded-xl border border-indigo-100 mb-6">
+            <div class="flex flex-col md:flex-row justify-between items-center gap-6">
+                
+                <div class="flex items-center gap-4">
+                    <div class="relative inline-block w-12 mr-2 align-middle select-none transition duration-200 ease-in">
+                        <input type="checkbox" name="toggle" id="power-switch" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer border-gray-300 transition-all duration-300 left-0"/>
+                        <label for="power-switch" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer transition-colors duration-300"></label>
+                    </div>
+                    <span class="font-bold text-gray-700">App Power</span>
+                    <div class="flex items-center gap-2 ml-4 px-3 py-1 rounded-full bg-gray-50 border border-gray-200">
+                        <span class="text-xs font-semibold text-gray-500 uppercase">Status</span>
+                        <div id="status-led" class="w-4 h-4 rounded-full bg-gray-300 transition-all duration-300"></div>
+                    </div>
+                </div>
+
+                <div id="connection-buttons" class="flex flex-wrap items-center gap-3 opacity-50 pointer-events-none transition-opacity duration-300">
+                    <button id="btn-usb" class="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition font-medium">
+                        USB Serial
+                    </button>
+                    
+                    <!-- WiFi Connection Input -->
+                    <div class="flex items-center gap-2 bg-gray-50 rounded-lg p-1 border border-gray-200">
+                        <input type="text" id="wifi-ip" placeholder="ESP32 IP (e.g. 192.168.1.X)" class="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded outline-none focus:border-blue-500 w-48 font-mono">
+                        <button id="btn-wifi" class="flex items-center gap-2 px-4 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-500 transition text-sm font-medium">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>
+                            WiFi Connect
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Data Grid -->
+        <div id="data-display" class="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
+            <!-- Voltage Card -->
+            <div class="card bg-white p-6 rounded-xl border border-blue-200 col-span-2 relative overflow-hidden">
+                <div class="flex justify-between items-start mb-2">
+                    <p class="text-sm font-medium text-gray-500">Sensor Voltage</p>
+                    <!-- Sensor Toggle -->
+                    <div class="flex items-center gap-2 z-10">
+                        <span class="text-xs text-gray-400">Sensor Active</span>
+                        <div class="relative inline-block w-8 align-middle select-none">
+                            <input type="checkbox" id="sensor-toggle" checked class="toggle-checkbox absolute block w-4 h-4 rounded-full bg-white border-4 appearance-none cursor-pointer border-gray-300 left-0 transition-all duration-300"/>
+                            <label for="sensor-toggle" class="toggle-label block overflow-hidden h-4 rounded-full bg-gray-300 cursor-pointer transition-colors duration-300"></label>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex items-baseline gap-2">
+                    <p id="current-voltage" class="text-4xl font-bold text-blue-600 mt-1">-- V</p>
+                    <p id="current-raw" class="text-sm text-gray-400 font-mono">(Raw: ----)</p>
+                </div>
+            </div>
+
+            <!-- Status Card -->
+            <div class="card bg-white p-6 rounded-xl border border-green-200">
+                <p class="text-sm font-medium text-gray-500">Connection</p>
+                <p id="status-message" class="text-sm font-bold text-gray-400 mt-3">Idle</p>
+            </div>
+        </div>
+
+        <!-- Chart -->
+        <div class="card bg-white p-6 rounded-xl">
+            <h2 class="text-xl font-semibold text-gray-700 mb-4">Live Trend</h2>
+            <div class="h-64 mb-6">
+                <canvas id="voltageChart"></canvas>
+            </div>
+            <button id="export-csv-btn" class="px-6 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50" disabled>Export CSV</button>
+        </div>
+        
+        <div id="error-box" class="hidden mt-4 p-4 bg-red-100 border-l-4 border-red-500 text-red-700 rounded-md">
+            <p class="font-bold">Error</p>
+            <p id="error-message"></p>
+        </div>
+    </div>
+
+    <script type="module">
+        const STATUS_EL = document.getElementById('status-message');
+        const VOLTAGE_EL = document.getElementById('current-voltage');
+        const RAW_EL = document.getElementById('current-raw');
+        const EXPORT_BTN = document.getElementById('export-csv-btn');
+        const ERROR_BOX = document.getElementById('error-box');
+        const ERROR_MSG = document.getElementById('error-message');
+        const BTN_USB = document.getElementById('btn-usb');
+        const BTN_WIFI = document.getElementById('btn-wifi');
+        const IP_INPUT = document.getElementById('wifi-ip');
+        const POWER_SWITCH = document.getElementById('power-switch');
+        const SENSOR_SWITCH = document.getElementById('sensor-toggle');
+        const STATUS_LED = document.getElementById('status-led');
+        const CONN_BTNS = document.getElementById('connection-buttons');
+
+        let chartInstance, dataHistory = [], port, reader, writer, ws;
+
+        function displayError(msg) {
+            ERROR_MSG.textContent = msg;
+            ERROR_BOX.classList.remove('hidden');
+            setTimeout(() => ERROR_BOX.classList.add('hidden'), 6000);
+        }
+
+        function setLedState(state) {
+            STATUS_LED.className = "w-4 h-4 rounded-full transition-all duration-300 ";
+            if (state === 'off') STATUS_LED.classList.add('bg-gray-300');
+            else if (state === 'standby') STATUS_LED.classList.add('bg-red-500', 'led-glow-red');
+            else if (state === 'active') STATUS_LED.classList.add('bg-green-500', 'led-glow-green');
+        }
+
+        function handlePowerToggle() {
+            if (POWER_SWITCH.checked) {
+                CONN_BTNS.classList.remove('opacity-50', 'pointer-events-none');
+                setLedState('standby');
+                STATUS_EL.textContent = "Ready to connect";
+                
+                // Load saved IP from local storage
+                const savedIP = localStorage.getItem('esp32_ip');
+                if(savedIP) IP_INPUT.value = savedIP;
+                
+            } else {
+                disconnectHardware();
+                CONN_BTNS.classList.add('opacity-50', 'pointer-events-none');
+                setLedState('off');
+                STATUS_EL.textContent = "Power Off";
+                resetData();
+            }
+        }
+        
+        async function sendCommand(cmd) {
+            if (!POWER_SWITCH.checked) return;
+            try {
+                // Send via USB
+                if (writer) await writer.write(cmd + "\n");
+                // Send via WiFi WebSockets
+                if (ws && ws.readyState === WebSocket.OPEN) ws.send(cmd);
+            } catch (e) { console.warn("Failed to send command", e); }
+        }
+
+        SENSOR_SWITCH.addEventListener('change', () => {
+            if (SENSOR_SWITCH.checked) {
+                VOLTAGE_EL.classList.remove('text-gray-400');
+                VOLTAGE_EL.classList.add('text-blue-600');
+                sendCommand("SENSOR:1");
+            } else {
+                VOLTAGE_EL.textContent = "Paused";
+                RAW_EL.textContent = "(Sensor Off)";
+                VOLTAGE_EL.classList.remove('text-blue-600');
+                VOLTAGE_EL.classList.add('text-gray-400');
+                sendCommand("SENSOR:0");
+            }
+        });
+
+        function resetData() {
+            VOLTAGE_EL.textContent = "-- V";
+            RAW_EL.textContent = "(Raw: ----)";
+        }
+
+        async function disconnectHardware() {
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+            if (reader) { await reader.cancel(); reader = null; }
+            if (writer) { await writer.close(); writer = null; }
+            if (port) { await port.close(); port = null; }
+        }
+
+        function initChart() {
+            const ctx = document.getElementById('voltageChart').getContext('2d');
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: { labels: [], datasets: [{ label: 'Voltage', data: [], borderColor: '#2563EB', fill: true }] },
+                options: { responsive: true, maintainAspectRatio: false, scales: { y: { min: 0, max: 1.3 } }, plugins: { legend: { display: false } } }
+            });
+        }
+
+        function processData(line) {
+            if (!POWER_SWITCH.checked) return;
+            try {
+                const d = JSON.parse(line);
+                if (SENSOR_SWITCH.checked && d.voltage !== undefined) {
+                    const label = new Date().toLocaleTimeString();
+                    VOLTAGE_EL.textContent = `${d.voltage.toFixed(4)} V`;
+                    RAW_EL.textContent = `(Raw: ${d.raw})`;
+
+                    if (chartInstance.data.labels.length > 50) {
+                        chartInstance.data.labels.shift();
+                        chartInstance.data.datasets[0].data.shift();
+                    }
+                    chartInstance.data.labels.push(label);
+                    chartInstance.data.datasets[0].data.push(d.voltage);
+                    chartInstance.update('none');
+
+                    dataHistory.push({ time: new Date().toISOString(), ...d });
+                    EXPORT_BTN.disabled = false;
+                }
+            } catch (e) { }
+        }
+
+        async function connectUSB() {
+            if (!navigator.serial) return displayError("Use Chrome/Edge for USB");
+            try {
+                port = await navigator.serial.requestPort();
+                await port.open({ baudRate: 115200 });
+                setLedState('active');
+                STATUS_EL.textContent = "Connected (USB)";
+                
+                writer = new TextEncoderStream().writable.getWriter();
+                port.readable.pipeTo(new TextDecoderStream().writable);
+                reader = new TextDecoderStream().readable.getReader();
+                let buffer = "";
+
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    buffer += value;
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop();
+                    lines.forEach(processData);
+                }
+            } catch (err) { displayError(err); handlePowerToggle(); }
+        }
+
+        function connectWiFi() {
+            const ip = IP_INPUT.value.trim();
+            if(!ip) {
+                return displayError("Please enter the ESP32 IP address from the Serial Monitor.");
+            }
+
+            // Save IP for next time
+            localStorage.setItem('esp32_ip', ip);
+            
+            STATUS_EL.textContent = "Connecting via WiFi...";
+            
+            // Clean up any existing connection
+            if (ws) ws.close();
+
+            try {
+                ws = new WebSocket(`ws://${ip}:81/`);
+                
+                ws.onopen = () => {
+                    setLedState('active');
+                    STATUS_EL.textContent = "Connected (WiFi)";
+                };
+                
+                ws.onmessage = (event) => {
+                    processData(event.data);
+                };
+                
+                ws.onclose = () => {
+                    if (POWER_SWITCH.checked) {
+                        STATUS_EL.textContent = "WiFi Disconnected";
+                        setLedState('standby');
+                    }
+                    ws = null;
+                };
+                
+                ws.onerror = (err) => {
+                    displayError("WiFi Connection Failed. Is the ESP32 on the same network?");
+                    if (ws) ws.close();
+                };
+                
+            } catch (e) {
+                displayError("Invalid IP Address format.");
+            }
+        }
+
+        function exportCSV() {
+            if (!dataHistory.length) return;
+            const csv = ['Timestamp,Raw,Voltage', 
+                ...dataHistory.map(d => `${d.time},${d.raw},${d.voltage}`)
+            ].join('\n');
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+            link.download = 'sensor_data.csv';
+            link.click();
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initChart();
+            POWER_SWITCH.checked = false; handlePowerToggle();
+            POWER_SWITCH.addEventListener('change', handlePowerToggle);
+            BTN_USB.addEventListener('click', connectUSB);
+            BTN_WIFI.addEventListener('click', connectWiFi);
+            EXPORT_BTN.addEventListener('click', exportCSV);
+            
+            // Allow pressing Enter in the IP box to connect
+            IP_INPUT.addEventListener('keypress', function (e) {
+                if (e.key === 'Enter') connectWiFi();
+            });
+        });
+    </script>
+</body>
+</html>
