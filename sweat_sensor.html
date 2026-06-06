@@ -245,20 +245,38 @@
             try {
                 STATUS_EL.textContent = "Requesting Device...";
                 
-                // Reverted to filtering by specific device name
                 bluetoothDevice = await navigator.bluetooth.requestDevice({
                     filters: [{ name: 'ESP32_Sweat_Sensor' }],
                     optionalServices: [SERVICE_UUID]
                 });
                 
-                STATUS_EL.textContent = "Connecting to GATT...";
-                
-                const connectPromise = bluetoothDevice.gatt.connect();
-                const timeoutPromise = new Promise((_, reject) => {
-                    setTimeout(() => reject(new Error("GATT Connection Timeout. Please reset your PC's Bluetooth.")), 7000);
-                });
-                
-                gattServer = await Promise.race([connectPromise, timeoutPromise]);
+                let connectAttempts = 0;
+                let connected = false;
+
+                // Automatic retry logic for GATT connection
+                while (connectAttempts < 2) {
+                    try {
+                        STATUS_EL.textContent = connectAttempts === 0 ? "Connecting to GATT..." : "Retrying GATT Connection...";
+                        
+                        const connectPromise = bluetoothDevice.gatt.connect();
+                        const timeoutPromise = new Promise((_, reject) => {
+                            setTimeout(() => reject(new Error("Timeout")), 10000); // 10 seconds per attempt
+                        });
+                        
+                        gattServer = await Promise.race([connectPromise, timeoutPromise]);
+                        connected = true;
+                        break; // Success, exit loop
+                        
+                    } catch (e) {
+                        connectAttempts++;
+                        if (connectAttempts >= 2) {
+                            throw new Error("GATT Connection Timeout. Please restart your ESP32 and try again.");
+                        }
+                        await new Promise(resolve => setTimeout(resolve, 1500)); // Wait before retrying
+                    }
+                }
+
+                if (!connected) return;
                 
                 await new Promise(resolve => setTimeout(resolve, 600)); // Stabilization delay
 
@@ -287,7 +305,7 @@
                 STATUS_EL.textContent = "Connection Failed";
                 setLedState('standby');
                 // Ensure cleanup if it hung
-                if (bluetoothDevice && bluetoothDevice.gatt.connected) {
+                if (bluetoothDevice && bluetoothDevice.gatt && bluetoothDevice.gatt.connected) {
                     bluetoothDevice.gatt.disconnect();
                 }
             }
