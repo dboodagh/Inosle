@@ -22,7 +22,6 @@
         </h1>
         <p class="text-center text-gray-600 mb-8">ESP32-S3 (XIAO)</p>
 
-        <!-- Power & Connection Controls -->
         <div class="card bg-white p-6 rounded-xl border border-indigo-100 mb-6">
             <div class="flex flex-col md:flex-row justify-between items-center gap-6">
                 
@@ -45,13 +44,10 @@
             </div>
         </div>
 
-        <!-- Data Grid -->
         <div id="data-display" class="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
-            <!-- Voltage Card -->
             <div class="card bg-white p-6 rounded-xl border border-blue-200 col-span-2 relative overflow-hidden">
                 <div class="flex justify-between items-start mb-2">
                     <p class="text-sm font-medium text-gray-500">Sensor Voltage</p>
-                    <!-- Sensor Toggle -->
                     <div class="flex items-center gap-2 z-10">
                         <span class="text-xs text-gray-400">Sensor Active</span>
                         <div class="relative inline-block w-8 align-middle select-none">
@@ -67,14 +63,12 @@
                 </div>
             </div>
 
-            <!-- Status Card -->
             <div class="card bg-white p-6 rounded-xl border border-green-200">
                 <p class="text-sm font-medium text-gray-500">Connection</p>
                 <p id="status-message" class="text-sm font-bold text-gray-400 mt-3">Idle</p>
             </div>
         </div>
 
-        <!-- Chart -->
         <div class="card bg-white p-6 rounded-xl">
             <h2 class="text-xl font-semibold text-gray-700 mb-4">Live Trend</h2>
             <div class="h-64 mb-6">
@@ -114,7 +108,7 @@
         function displayError(msg) {
             ERROR_MSG.textContent = msg;
             ERROR_BOX.classList.remove('hidden');
-            setTimeout(() => ERROR_BOX.classList.add('hidden'), 5000);
+            setTimeout(() => ERROR_BOX.classList.add('hidden'), 6000);
         }
 
         function setLedState(state) {
@@ -141,11 +135,9 @@
         async function sendCommand(cmd) {
             if (!POWER_SWITCH.checked) return;
             try {
-                // USB Send
                 if (writer) {
                     await writer.write(cmd + "\n");
                 }
-                // BLE Send
                 if (txChar) {
                     const encoder = new TextEncoder();
                     await txChar.writeValue(encoder.encode(cmd));
@@ -155,7 +147,6 @@
             }
         }
 
-        // Handle Sensor Toggle Logic
         SENSOR_SWITCH.addEventListener('change', () => {
             if (SENSOR_SWITCH.checked) {
                 VOLTAGE_EL.classList.remove('text-gray-400');
@@ -176,7 +167,9 @@
         }
 
         async function disconnectHardware() {
-            if (gattServer?.connected) bluetoothDevice.gatt.disconnect();
+            if (gattServer?.connected) {
+                try { bluetoothDevice.gatt.disconnect(); } catch(e) {}
+            }
             if (reader) { await reader.cancel(); reader = null; }
             if (writer) { await writer.close(); writer = null; }
             if (port) { await port.close(); port = null; }
@@ -197,7 +190,6 @@
             try {
                 const d = JSON.parse(line);
                 
-                // Only update Voltage/Chart if sensor is enabled in UI
                 if (SENSOR_SWITCH.checked && d.voltage !== undefined) {
                     const timestamp = new Date();
                     const label = timestamp.toLocaleTimeString();
@@ -227,12 +219,10 @@
                 setLedState('active');
                 STATUS_EL.textContent = "Connected (USB)";
                 
-                // Setup Writer (for commands)
                 const textEncoder = new TextEncoderStream();
                 const writableStreamClosed = textEncoder.readable.pipeTo(port.writable);
                 writer = textEncoder.writable.getWriter();
 
-                // Setup Reader
                 const decoder = new TextDecoderStream();
                 const closed = port.readable.pipeTo(decoder.writable);
                 reader = decoder.readable.getReader();
@@ -251,30 +241,34 @@
 
         async function connectBLE() {
             if (!navigator.bluetooth) return displayError("Use Chrome/Edge for BLE");
+            
             try {
                 STATUS_EL.textContent = "Requesting Device...";
-                
                 bluetoothDevice = await navigator.bluetooth.requestDevice({
                     filters: [{ services: [SERVICE_UUID] }]
                 });
                 
                 STATUS_EL.textContent = "Connecting to GATT...";
-                gattServer = await bluetoothDevice.gatt.connect();
                 
-                // FIX: Add stabilization delay to prevent "GATT Server is disconnected" error
-                await new Promise(resolve => setTimeout(resolve, 600));
+                // FIX: Add a 7-second timeout to the GATT connection process
+                const connectPromise = bluetoothDevice.gatt.connect();
+                const timeoutPromise = new Promise((_, reject) => {
+                    setTimeout(() => reject(new Error("GATT Connection Timeout. Please reset your PC's Bluetooth.")), 7000);
+                });
+                
+                gattServer = await Promise.race([connectPromise, timeoutPromise]);
+                
+                await new Promise(resolve => setTimeout(resolve, 600)); // Stabilization delay
 
                 STATUS_EL.textContent = "Retrieving Services...";
                 const service = await gattServer.getPrimaryService(SERVICE_UUID);
                 
-                // Get RX (Notification) Char
                 const rxChar = await service.getCharacteristic(CHARACTERISTIC_UUID_RX);
                 await rxChar.startNotifications();
                 rxChar.addEventListener('characteristicvaluechanged', (e) => {
                     processData(new TextDecoder('utf-8').decode(e.target.value));
                 });
                 
-                // Get TX (Write) Char if available
                 try {
                     txChar = await service.getCharacteristic(CHARACTERISTIC_UUID_TX);
                 } catch(e) { console.log("TX Char not found"); }
@@ -285,10 +279,15 @@
                 
                 setLedState('active');
                 STATUS_EL.textContent = "Connected (BLE)";
+                
             } catch (err) { 
-                displayError(err); 
+                displayError(err.message || err); 
                 STATUS_EL.textContent = "Connection Failed";
                 setLedState('standby');
+                // Ensure cleanup if it hung
+                if (bluetoothDevice && bluetoothDevice.gatt.connected) {
+                    bluetoothDevice.gatt.disconnect();
+                }
             }
         }
 
