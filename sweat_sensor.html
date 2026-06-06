@@ -245,10 +245,9 @@
             try {
                 STATUS_EL.textContent = "Requesting Device...";
                 
-                // FIX: acceptAllDevices allows you to see every nearby device,
-                // bypassing OS filtering bugs entirely.
+                // Reverted to filtering by specific device name
                 bluetoothDevice = await navigator.bluetooth.requestDevice({
-                    acceptAllDevices: true,
+                    filters: [{ name: 'ESP32_Sweat_Sensor' }],
                     optionalServices: [SERVICE_UUID]
                 });
                 
