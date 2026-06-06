@@ -252,12 +252,19 @@
         async function connectBLE() {
             if (!navigator.bluetooth) return displayError("Use Chrome/Edge for BLE");
             try {
-                // FIX: Filtering by 'services' instead of 'name' is much more reliable 
-                // in Web Bluetooth across Windows and Mac OS.
+                STATUS_EL.textContent = "Requesting Device...";
+                
                 bluetoothDevice = await navigator.bluetooth.requestDevice({
                     filters: [{ services: [SERVICE_UUID] }]
                 });
+                
+                STATUS_EL.textContent = "Connecting to GATT...";
                 gattServer = await bluetoothDevice.gatt.connect();
+                
+                // FIX: Add stabilization delay to prevent "GATT Server is disconnected" error
+                await new Promise(resolve => setTimeout(resolve, 600));
+
+                STATUS_EL.textContent = "Retrieving Services...";
                 const service = await gattServer.getPrimaryService(SERVICE_UUID);
                 
                 // Get RX (Notification) Char
@@ -275,9 +282,14 @@
                 bluetoothDevice.addEventListener('gattserverdisconnected', () => {
                     handlePowerToggle(); // Reset state
                 });
+                
                 setLedState('active');
                 STATUS_EL.textContent = "Connected (BLE)";
-            } catch (err) { displayError(err); }
+            } catch (err) { 
+                displayError(err); 
+                STATUS_EL.textContent = "Connection Failed";
+                setLedState('standby');
+            }
         }
 
         function exportCSV() {
