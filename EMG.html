@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Live EMG Monitor</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #121212;
+      color: #ffffff;
+      text-align: center;
+      margin: 0;
+      padding: 20px;
+    }
+    .hud {
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      max-width: 900px;
+      margin: 0 auto 20px auto;
+    }
+    .box {
+      background: #1e1e1e;
+      padding: 20px;
+      border-radius: 12px;
+      min-width: 200px;
+      border: 1px solid #333;
+    }
+    .val-container {
+      font-size: 2.5em;
+      font-weight: bold;
+      color: #ff3b30;
+      margin-top: 10px;
+    }
+    /* Flex Power Bar */
+    .bar-bg {
+      background: #333;
+      height: 30px;
+      border-radius: 15px;
+      margin-top: 15px;
+      overflow: hidden;
+      position: relative;
+    }
+    .bar-fill {
+      background: linear-gradient(90deg, #ff9500, #ff3b30);
+      height: 100%;
+      width: 0%;
+      transition: width 0.05s linear;
+    }
+    canvas {
+      background-color: #000000;
+      border: 2px solid #333;
+      border-radius: 8px;
+      width: 100%;
+      max-width: 900px;
+      height: 400px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    }
+    #status { color: #2196F3; font-weight: bold; }
+    input[type="text"] {
+      padding: 10px;
+      border-radius: 5px;
+      border: none;
+      font-size: 1em;
+      width: 150px;
+      text-align: center;
+    }
+    button {
+      padding: 10px 20px;
+      border-radius: 5px;
+      border: none;
+      background-color: #2196F3;
+      color: white;
+      font-size: 1em;
+      cursor: pointer;
+    }
+    .controls { margin-bottom: 20px; }
+  </style>
+</head>
+<body>
+
+  <h2>Live EMG (Muscle) Monitor</h2>
+  
+  <div class="controls">
+    <input type="text" id="ipInput" placeholder="ESP32 IP Address" value="192.168.x.x">
+    <button onclick="connectWS()">Connect</button>
+    <span id="status" style="margin-left: 15px;">Disconnected</span>
+  </div>
+
+  <div class="hud">
+    <div class="box">
+      <div>Flex Power</div>
+      <div class="val-container"><span id="flexVal">0</span>%</div>
+      <div class="bar-bg">
+        <div id="flexBar" class="bar-fill"></div>
+      </div>
+    </div>
+  </div>
+
+  <canvas id="emgCanvas"></canvas>
+
+  <script>
+    const canvas = document.getElementById('emgCanvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = 900; 
+    canvas.height = 400;
+
+    // Buffer for 900 pixels worth of data
+    let emgData = new Array(900).fill(2048); 
+    let ws = null;
+
+    function connectWS() {
+      if(ws) ws.close();
+      const ip = document.getElementById('ipInput').value;
+      ws = new WebSocket('ws://' + ip + ':81/');
+
+      ws.onopen = () => {
+        document.getElementById('status').innerText = "Connected";
+        document.getElementById('status').style.color = "#4CAF50";
+      };
+      
+      ws.onclose = () => {
+        document.getElementById('status').innerText = "Disconnected";
+        document.getElementById('status').style.color = "#f44336";
+      };
+
+      ws.onmessage = function(event) {
+        let chunks = event.data.split(';');
+        
+        chunks.forEach(chunk => {
+          if(!chunk) return;
+          let parts = chunk.split(',');
+          if(parts.length === 2) {
+            let rawVal = parseFloat(parts[0]);
+            let envelopeVal = parseFloat(parts[1]);
+
+            // Update Plot Data
+            emgData.push(rawVal);
+            emgData.shift(); 
+
+            // Update Flex Power UI
+            // Assuming max envelope is roughly 1000. Adjust this divisor based on your sensor!
+            let flexPercentage = Math.min((envelopeVal / 800) * 100, 100); 
+            document.getElementById('flexVal').innerText = Math.round(flexPercentage);
+            document.getElementById('flexBar').style.width = flexPercentage + "%";
+          }
+        });
+      };
+    }
+
+    // Animation Loop for the Plot
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      // Draw Grid
+      ctx.strokeStyle = '#1a1a1a'; 
+      ctx.lineWidth = 1;
+      for(let i=0; i<canvas.width; i+=50) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,canvas.height); ctx.stroke(); }
+      for(let i=0; i<canvas.height; i+=50) { ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(canvas.width,i); ctx.stroke(); }
+
+      // Draw Center Line
+      ctx.strokeStyle = '#333';
+      ctx.beginPath();
+      ctx.moveTo(0, canvas.height / 2);
+      ctx.lineTo(canvas.width, canvas.height / 2);
+      ctx.stroke();
+
+      // Draw EMG Waveform
+      ctx.strokeStyle = '#00FF00'; // Neon green for raw signal
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      
+      // Fixed scaling for 12-bit ADC (0 to 4095)
+      let min = 0;
+      let max = 4095;
+      let range = max - min;
+      let scaleY = canvas.height / range;
+
+      for (let i = 0; i < emgData.length; i++) {
+        let x = i * (canvas.width / 900);
+        // Invert Y so higher values go up
+        let y = canvas.height - ((emgData[i] - min) * scaleY); 
+        
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+      
+      requestAnimationFrame(draw);
+    }
+    
+    // Start drawing loop immediately
+    draw();
+  </script>
+</body>
+</html>
