@@ -11,7 +11,9 @@
     --border: #2e3540;
     --text: #e8ebef;
     --muted: #8a93a0;
-    --accent: #4da3ff;
+    --accent: #4da3ff;     /* sensor 1 — blue */
+    --s2: #ff453a;         /* sensor 2 — red  */
+    --threshold: #ffb02e;  /* threshold line — amber, distinct from the red trace */
     --alarm: #ff3b30;
   }
   * { box-sizing: border-box; }
@@ -42,15 +44,17 @@
     cursor: pointer;
   }
   button.secondary { background: #39414d; color: var(--text); }
+  button.recording { background: var(--alarm); color: #fff; }
   button:disabled { opacity: 0.45; cursor: default; }
   #status { font-size: 13px; color: var(--muted); }
+  #recInfo { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
 
   main {
     display: grid;
-    grid-template-columns: 1fr 280px;
+    grid-template-columns: 1fr 300px;
     gap: 16px;
     padding: 16px 20px;
-    max-width: 1200px;
+    max-width: 1220px;
     margin: 0 auto;
   }
   @media (max-width: 800px) { main { grid-template-columns: 1fr; } }
@@ -62,37 +66,49 @@
     padding: 14px;
   }
   #chartPanel { min-height: 380px; display: flex; flex-direction: column; }
-  #chart { flex: 1; width: 100%; min-height: 340px; }
+  .legend { display: flex; gap: 18px; margin-bottom: 8px; font-size: 13px; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .swatch { width: 14px; height: 4px; border-radius: 2px; display: inline-block; }
+  #chart { flex: 1; width: 100%; min-height: 320px; }
 
-  /* ---- alarm light ---- */
-  .lightWrap { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 18px 14px; }
-  #light {
-    width: 84px;
-    height: 84px;
+  /* ---- alarm lights ---- */
+  .lights { display: flex; justify-content: space-around; padding: 16px 8px; }
+  .lightCell { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .light {
+    width: 74px;
+    height: 74px;
     border-radius: 50%;
     background: #62686f;
-    border: 4px solid #3a4048;
+    border: 4px solid;
     transition: background 0.2s;
   }
-  #light.alarm { animation: flash 0.45s linear infinite; border-color: #5a0a0a; }
+  #light0 { border-color: var(--accent); }
+  #light1 { border-color: var(--s2); }
+  .light.alarm { animation: flash 0.45s linear infinite; }
   @keyframes flash {
-    0%, 100% { background: var(--alarm); box-shadow: 0 0 36px 8px rgba(255,59,48,0.75); }
+    0%, 100% { background: var(--alarm); box-shadow: 0 0 30px 6px rgba(255,59,48,0.75); }
     50%      { background: #5e0d09; box-shadow: none; }
   }
-  #lightLabel { font-size: 13px; color: var(--muted); letter-spacing: 0.06em; }
-  #lightLabel.alarm { color: var(--alarm); font-weight: 700; }
+  .lightLabel { font-size: 12px; color: var(--muted); letter-spacing: 0.04em; text-align: center; }
+  .lightLabel.alarm { color: var(--alarm); font-weight: 700; }
+  .lightLabel b { display: block; font-size: 13px; color: var(--text); }
 
-  .bigValue { text-align: center; }
-  .bigValue .num { font-size: 44px; font-weight: 700; font-variant-numeric: tabular-nums; }
-  .bigValue .num.alarm { color: var(--alarm); }
-  .bigValue .unit { font-size: 15px; color: var(--muted); }
-  .peakRow { display: flex; justify-content: center; gap: 8px; align-items: baseline; font-size: 13px; color: var(--muted); margin-top: 4px; }
-  .peakRow b { color: var(--text); font-variant-numeric: tabular-nums; }
-  .peakRow a { color: var(--accent); cursor: pointer; text-decoration: none; }
+  .vals { display: flex; gap: 10px; margin-top: 4px; }
+  .valCard { flex: 1; text-align: center; border: 1px solid var(--border); border-radius: 10px; padding: 8px 4px; }
+  .valCard .who { font-size: 11px; color: var(--muted); display: inline-flex; align-items: center; gap: 5px; }
+  .valCard .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  .valCard .num { font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .valCard .num.alarm { color: var(--alarm); }
+  .valCard .unit { font-size: 12px; color: var(--muted); }
+  .valCard .peak { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .valCard .peak b { color: var(--text); font-variant-numeric: tabular-nums; }
+  #resetPeak { display: block; text-align: center; margin-top: 8px; color: var(--accent); cursor: pointer; font-size: 12px; }
 
-  table.live { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 8px; }
+  table.live { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 10px; }
+  table.live th { font-weight: 600; color: var(--muted); text-align: right; padding: 3px 2px; font-size: 11.5px; }
+  table.live th.lbl { text-align: left; }
   table.live td { padding: 3px 2px; color: var(--muted); }
-  table.live td:last-child { text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
+  table.live td.val { text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
 
   details { margin-top: 12px; }
   summary { cursor: pointer; font-size: 13.5px; font-weight: 600; color: var(--muted); }
@@ -108,7 +124,8 @@
     font-size: 13px;
     text-align: right;
   }
-  .calRow { display: flex; gap: 8px; margin-top: 10px; }
+  .calRow { display: flex; gap: 8px; margin-top: 10px; align-items: center; }
+  .calRow input { flex: 1; background:#12161b; border:1px solid var(--border); color:var(--text); border-radius:6px; padding:5px 7px; font-size:13px; }
   .calRow button { padding: 6px 10px; font-size: 12.5px; flex-shrink: 0; }
   .hint { font-size: 11.5px; color: var(--muted); margin-top: 8px; line-height: 1.5; }
   #serialWarning { color: #ffb02e; font-size: 13px; padding: 8px 20px; display: none; }
@@ -120,6 +137,9 @@
   <h1>🦶 Foot Pressure Monitor</h1>
   <span id="status">Disconnected</span>
   <div class="spacer"></div>
+  <span id="recInfo"></span>
+  <button id="recordBtn" class="secondary">● Record</button>
+  <button id="downloadBtn" class="secondary" disabled>Download CSV</button>
   <button id="demoBtn" class="secondary">Demo mode</button>
   <button id="connectBtn">Connect sensor</button>
 </header>
@@ -127,30 +147,50 @@
 
 <main>
   <div class="panel" id="chartPanel">
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--accent)"></i> Sensor 1</span>
+      <span><i class="swatch" style="background:var(--s2)"></i> Sensor 2</span>
+      <span><i class="swatch" style="background:var(--threshold)"></i> Threshold</span>
+    </div>
     <canvas id="chart"></canvas>
   </div>
 
   <div>
-    <div class="panel lightWrap">
-      <div id="light"></div>
-      <div id="lightLabel">PRESSURE OK</div>
+    <div class="panel lights">
+      <div class="lightCell">
+        <div class="light" id="light0"></div>
+        <div class="lightLabel" id="label0"><b>Sensor 1</b>OK</div>
+      </div>
+      <div class="lightCell">
+        <div class="light" id="light1"></div>
+        <div class="lightLabel" id="label1"><b>Sensor 2</b>OK</div>
+      </div>
     </div>
 
     <div class="panel" style="margin-top:16px;">
-      <div class="bigValue">
-        <span class="num" id="kpaNow">0.0</span>
-        <span class="unit">kPa</span>
+      <div class="vals">
+        <div class="valCard">
+          <div class="who"><span class="dot" style="background:var(--accent)"></span> Sensor 1</div>
+          <div><span class="num" id="kpa0">0.0</span></div>
+          <div class="unit">kPa</div>
+          <div class="peak">peak <b id="peak0">0.0</b></div>
+        </div>
+        <div class="valCard">
+          <div class="who"><span class="dot" style="background:var(--s2)"></span> Sensor 2</div>
+          <div><span class="num" id="kpa1">0.0</span></div>
+          <div class="unit">kPa</div>
+          <div class="peak">peak <b id="peak1">0.0</b></div>
+        </div>
       </div>
-      <div class="peakRow">
-        Peak: <b id="kpaPeak">0.0</b> kPa <a id="resetPeak">reset</a>
-      </div>
+      <a id="resetPeak">reset peaks</a>
 
       <table class="live">
-        <tr><td>Raw ADC</td><td id="vRaw">–</td></tr>
-        <tr><td>Voltage</td><td id="vVolt">–</td></tr>
-        <tr><td>FSR resistance</td><td id="vRes">–</td></tr>
-        <tr><td>Conductance</td><td id="vCond">–</td></tr>
-        <tr><td>Force</td><td id="vForce">–</td></tr>
+        <tr><th class="lbl"></th><th>S1</th><th>S2</th></tr>
+        <tr><td>Raw ADC</td><td class="val" id="vRaw0">–</td><td class="val" id="vRaw1">–</td></tr>
+        <tr><td>Voltage</td><td class="val" id="vVolt0">–</td><td class="val" id="vVolt1">–</td></tr>
+        <tr><td>FSR R (kΩ)</td><td class="val" id="vRes0">–</td><td class="val" id="vRes1">–</td></tr>
+        <tr><td>Cond. (µS)</td><td class="val" id="vCond0">–</td><td class="val" id="vCond1">–</td></tr>
+        <tr><td>Force (N)</td><td class="val" id="vForce0">–</td><td class="val" id="vForce1">–</td></tr>
       </table>
 
       <details open>
@@ -159,17 +199,19 @@
         <div class="field"><label>Supply Vcc (V)</label><input type="number" id="sVcc" step="0.1"></div>
         <div class="field"><label>Divider R (Ω)</label><input type="number" id="sRdiv" step="100"></div>
         <div class="field"><label>Sensor radius (mm)</label><input type="number" id="sRadius" step="0.1"></div>
-        <div class="field"><label>Cal (µS per N)</label><input type="number" id="sCal" step="0.1"></div>
+        <div class="field"><label>Cal S1 (µS per N)</label><input type="number" id="sCal0" step="0.1"></div>
+        <div class="field"><label>Cal S2 (µS per N)</label><input type="number" id="sCal1" step="0.1"></div>
         <div class="field"><label>Mute beeper</label><input type="checkbox" id="sMute"></div>
 
         <div class="calRow">
-          <input type="number" id="calWeight" placeholder="grams" step="50" style="flex:1; background:#12161b; border:1px solid var(--border); color:var(--text); border-radius:6px; padding:5px 7px; font-size:13px;">
-          <button class="secondary" id="calBtn">Calibrate</button>
+          <input type="number" id="calWeight" placeholder="grams" step="50">
+          <button class="secondary" id="calBtn0">Cal S1</button>
+          <button class="secondary" id="calBtn1">Cal S2</button>
         </div>
         <div class="hint">
-          To calibrate: rest a known weight (covering the whole sensing area) on the
-          sensor, enter its mass in grams, then press Calibrate. The µS/N factor is
-          computed from the current reading. Copy the value into the firmware so the
+          To calibrate a sensor: rest a known weight (covering the whole sensing
+          area) on it, enter its mass in grams, then press that sensor's button.
+          Copy each µS/N value into CAL_US_PER_N[ ] in the firmware so the
           standalone buzzer matches.
         </div>
       </details>
@@ -180,13 +222,19 @@
 <script>
 "use strict";
 
+const N = 2;  // number of sensors
+
 /* ============================== settings ============================== */
 
-const DEFAULTS = { threshold: 140, vcc: 3.3, rdiv: 47000, radius: 7.5, cal: 33, mute: false };
+const DEFAULTS = { threshold: 140, vcc: 3.3, rdiv: 47000, radius: 7.5, cal0: 33, cal1: 33, mute: false };
 const settings = Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem("fpm-settings") || "{}"));
+const cal = [settings.cal0, settings.cal1];
 
 const $ = (id) => document.getElementById(id);
-const fields = { threshold: $("sThreshold"), vcc: $("sVcc"), rdiv: $("sRdiv"), radius: $("sRadius"), cal: $("sCal") };
+const fields = {
+  threshold: $("sThreshold"), vcc: $("sVcc"), rdiv: $("sRdiv"), radius: $("sRadius"),
+  cal0: $("sCal0"), cal1: $("sCal1"),
+};
 
 for (const [key, el] of Object.entries(fields)) {
   el.value = settings[key];
@@ -194,6 +242,7 @@ for (const [key, el] of Object.entries(fields)) {
     const v = parseFloat(el.value);
     if (isFinite(v) && v > 0) settings[key] = v;
     el.value = settings[key];
+    cal[0] = settings.cal0; cal[1] = settings.cal1;
     saveSettings();
   });
 }
@@ -203,24 +252,24 @@ $("sMute").addEventListener("change", () => { settings.mute = $("sMute").checked
 function saveSettings() { localStorage.setItem("fpm-settings", JSON.stringify(settings)); }
 
 /* ====================== pressure conversion model ====================== */
-/* 3.3V — FSR — A0 — 47k — GND.  Vout rises as the FSR is pressed. */
+/* 3.3V — FSR — A(n) — 47k — GND.  Vout rises as the FSR is pressed. */
 
-function rawToSample(raw) {
+function rawToSample(raw, calUsPerN) {
   const vout = Math.min((raw / 4095) * settings.vcc, settings.vcc - 0.005);
   const areaM2 = Math.PI * Math.pow(settings.radius / 1000, 2);
   if (vout < 0.005) return { raw, vout: 0, rFsr: Infinity, gMicroS: 0, forceN: 0, kpa: 0 };
   const rFsr = settings.rdiv * (settings.vcc - vout) / vout;
   const gMicroS = 1e6 / rFsr;
-  const forceN = gMicroS / settings.cal;
+  const forceN = gMicroS / calUsPerN;
   const kpa = Math.min(forceN / areaM2 / 1000, 999);
   return { raw, vout, rFsr, gMicroS, forceN, kpa };
 }
 
-/* Inverse of the above — used by demo mode to synthesize realistic raw values. */
-function kpaToRaw(kpa) {
+/* Inverse — used by demo mode to synthesize realistic raw values. */
+function kpaToRaw(kpa, calUsPerN) {
   if (kpa <= 0) return 0;
   const areaM2 = Math.PI * Math.pow(settings.radius / 1000, 2);
-  const gMicroS = kpa * 1000 * areaM2 * settings.cal;
+  const gMicroS = kpa * 1000 * areaM2 * calUsPerN;
   const rFsr = 1e6 / gMicroS;
   const vout = settings.vcc * settings.rdiv / (settings.rdiv + rFsr);
   return Math.round((vout / settings.vcc) * 4095);
@@ -229,46 +278,120 @@ function kpaToRaw(kpa) {
 /* ============================ data + state ============================ */
 
 const WINDOW_S = 30;
-const points = [];            // { t: seconds, kpa }
+const points = [[], []];          // per sensor: { t, kpa }
 let firstDeviceMs = null;
-let kpaSmooth = 0;
-let peakKpa = 0;
-let lastSampleLocal = 0;      // performance.now() of last accepted sample
+const kpaSmooth = [0, 0];
+const peakKpa = [0, 0];
+const lastConductance = [0, 0];
+let lastDomUpdate = 0;
 
-function handleSample(deviceMs, raw) {
+function handleSample(deviceMs, raws) {
   if (firstDeviceMs === null) firstDeviceMs = deviceMs;
   const t = (deviceMs - firstDeviceMs) / 1000;
-  const s = rawToSample(raw);
 
-  kpaSmooth = 0.3 * s.kpa + 0.7 * kpaSmooth;
-  peakKpa = Math.max(peakKpa, kpaSmooth);
-
-  points.push({ t, kpa: kpaSmooth });
-  while (points.length && points[0].t < t - WINDOW_S - 1) points.shift();
-
-  // Throttle DOM text updates to ~10 Hz
-  const now = performance.now();
-  if (now - lastSampleLocal > 100) {
-    lastSampleLocal = now;
-    $("kpaNow").textContent = kpaSmooth.toFixed(1);
-    $("kpaPeak").textContent = peakKpa.toFixed(1);
-    $("vRaw").textContent = s.raw;
-    $("vVolt").textContent = s.vout.toFixed(3) + " V";
-    $("vRes").textContent = isFinite(s.rFsr) ? (s.rFsr / 1000).toFixed(1) + " kΩ" : "∞";
-    $("vCond").textContent = s.gMicroS.toFixed(1) + " µS";
-    $("vForce").textContent = s.forceN.toFixed(2) + " N";
+  const s = [];
+  for (let i = 0; i < N; i++) {
+    s[i] = rawToSample(raws[i], cal[i]);
+    kpaSmooth[i] = 0.3 * s[i].kpa + 0.7 * kpaSmooth[i];
+    peakKpa[i] = Math.max(peakKpa[i], kpaSmooth[i]);
+    lastConductance[i] = s[i].gMicroS;
+    points[i].push({ t, kpa: kpaSmooth[i] });
+    while (points[i].length && points[i][0].t < t - WINDOW_S - 1) points[i].shift();
   }
 
-  lastConductance = s.gMicroS;
-  updateAlarm(kpaSmooth);
+  const now = performance.now();
+
+  if (recording) {                          // full-rate capture, independent of stream resets
+    const lt = (now - recordStartPerf) / 1000;
+    recLog.push(lt.toFixed(3) + "," + raws[0] + "," + kpaSmooth[0].toFixed(2) + "," +
+                raws[1] + "," + kpaSmooth[1].toFixed(2));
+  }
+
+  if (now - lastDomUpdate > 100) {          // throttle text to ~10 Hz
+    lastDomUpdate = now;
+    for (let i = 0; i < N; i++) {
+      $("kpa" + i).textContent = kpaSmooth[i].toFixed(1);
+      $("peak" + i).textContent = peakKpa[i].toFixed(1);
+      $("vRaw" + i).textContent = s[i].raw;
+      $("vVolt" + i).textContent = s[i].vout.toFixed(3);
+      $("vRes" + i).textContent = isFinite(s[i].rFsr) ? (s[i].rFsr / 1000).toFixed(1) : "∞";
+      $("vCond" + i).textContent = s[i].gMicroS.toFixed(1);
+      $("vForce" + i).textContent = s[i].forceN.toFixed(2);
+    }
+  }
+
+  refreshAlarms();
 }
 
-$("resetPeak").addEventListener("click", () => { peakKpa = 0; $("kpaPeak").textContent = "0.0"; });
+$("resetPeak").addEventListener("click", () => {
+  for (let i = 0; i < N; i++) { peakKpa[i] = 0; $("peak" + i).textContent = "0.0"; }
+});
+
+/* ============================ csv logging ============================ */
+
+let recording = false;
+let recordStartPerf = 0;
+let recCountTimer = null;
+const recLog = [];                          // pre-joined CSV rows
+const recordBtn = $("recordBtn");
+const downloadBtn = $("downloadBtn");
+const recInfo = $("recInfo");
+
+function updateRecInfo() {
+  if (recording) {
+    const secs = (performance.now() - recordStartPerf) / 1000;
+    recInfo.textContent = `● REC ${secs.toFixed(0)}s · ${recLog.length} samples`;
+    recInfo.style.color = "var(--alarm)";
+  } else if (recLog.length) {
+    recInfo.textContent = `${recLog.length} samples ready`;
+    recInfo.style.color = "var(--muted)";
+  } else {
+    recInfo.textContent = "";
+  }
+}
+
+recordBtn.addEventListener("click", () => {
+  if (!recording) {
+    if (recLog.length && !confirm("Start a new recording? This discards the previous unsaved capture.")) return;
+    recLog.length = 0;
+    recording = true;
+    recordStartPerf = performance.now();
+    recordBtn.textContent = "■ Stop";
+    recordBtn.classList.add("recording");
+    downloadBtn.disabled = true;
+    recCountTimer = setInterval(updateRecInfo, 500);
+    updateRecInfo();
+  } else {
+    recording = false;
+    clearInterval(recCountTimer);
+    recordBtn.textContent = "● Record";
+    recordBtn.classList.remove("recording");
+    downloadBtn.disabled = recLog.length === 0;
+    updateRecInfo();
+  }
+});
+
+downloadBtn.addEventListener("click", () => {
+  if (!recLog.length) return;
+  const header = "time_s,sensor1_raw,sensor1_kPa,sensor2_raw,sensor2_kPa";
+  const csv = header + "\n" + recLog.join("\n") + "\n";
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, "0");
+  a.href = url;
+  a.download = `foot-pressure-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+});
 
 /* ============================== alarm ============================== */
 
 const HYSTERESIS_KPA = 5;
-let alarming = false;
+const alarming = [false, false];
 let beepTimer = null;
 let audioCtx = null;
 
@@ -292,40 +415,40 @@ function beep() {
   osc.stop(t0 + 0.2);
 }
 
-function updateAlarm(kpa) {
-  if (!alarming && kpa >= settings.threshold) {
-    alarming = true;
-    $("light").classList.add("alarm");
-    $("lightLabel").classList.add("alarm");
-    $("lightLabel").textContent = "OVER THRESHOLD";
-    $("kpaNow").classList.add("alarm");
-    beep();
-    beepTimer = setInterval(beep, 500);
-  } else if (alarming && kpa < settings.threshold - HYSTERESIS_KPA) {
-    alarming = false;
-    $("light").classList.remove("alarm");
-    $("lightLabel").classList.remove("alarm");
-    $("lightLabel").textContent = "PRESSURE OK";
-    $("kpaNow").classList.remove("alarm");
-    clearInterval(beepTimer);
-    beepTimer = null;
+function refreshAlarms() {
+  for (let i = 0; i < N; i++) {
+    const wasAlarming = alarming[i];
+    if (!wasAlarming && kpaSmooth[i] >= settings.threshold) alarming[i] = true;
+    else if (wasAlarming && kpaSmooth[i] < settings.threshold - HYSTERESIS_KPA) alarming[i] = false;
+
+    if (alarming[i] === wasAlarming) continue;
+    $("light" + i).classList.toggle("alarm", alarming[i]);
+    $("label" + i).classList.toggle("alarm", alarming[i]);
+    $("kpa" + i).classList.toggle("alarm", alarming[i]);
+    $("label" + i).innerHTML = "<b>Sensor " + (i + 1) + "</b>" + (alarming[i] ? "OVER" : "OK");
   }
+
+  const anyAlarm = alarming.some(Boolean);
+  if (anyAlarm && !beepTimer) { beep(); beepTimer = setInterval(beep, 500); }
+  else if (!anyAlarm && beepTimer) { clearInterval(beepTimer); beepTimer = null; }
 }
 
 /* =========================== calibration =========================== */
 
-let lastConductance = 0;
-
-$("calBtn").addEventListener("click", () => {
+function calibrate(i) {
   const grams = parseFloat($("calWeight").value);
   if (!isFinite(grams) || grams <= 0) { alert("Enter the known weight in grams first."); return; }
-  if (lastConductance <= 0) { alert("No load detected — place the weight on the sensor first."); return; }
+  if (lastConductance[i] <= 0) { alert("No load detected on Sensor " + (i + 1) + " — place the weight on it first."); return; }
   const newtons = (grams / 1000) * 9.81;
-  settings.cal = +(lastConductance / newtons).toFixed(2);
-  fields.cal.value = settings.cal;
+  const v = +(lastConductance[i] / newtons).toFixed(2);
+  cal[i] = v;
+  settings["cal" + i] = v;
+  fields["cal" + i].value = v;
   saveSettings();
-  alert(`Calibration set: ${settings.cal} µS/N.\nCopy this into CAL_US_PER_N in the firmware.`);
-});
+  alert(`Sensor ${i + 1} calibration set: ${v} µS/N.\nCopy this into CAL_US_PER_N[${i}] in the firmware.`);
+}
+$("calBtn0").addEventListener("click", () => calibrate(0));
+$("calBtn1").addEventListener("click", () => calibrate(1));
 
 /* ============================ web serial ============================ */
 
@@ -375,12 +498,7 @@ async function readLoop() {
             const line = buf.slice(0, nl).trim();
             buf = buf.slice(nl + 1);
             if (!line) continue;
-            const parts = line.split(",");
-            const ms = parseInt(parts[0], 10);
-            const raw = parseInt(parts[1] ?? parts[0], 10);
-            if (isFinite(ms) && isFinite(raw)) {
-              handleSample(parts.length > 1 ? ms : performance.now(), raw);
-            }
+            parseLine(line);
           }
         }
       } finally {
@@ -393,6 +511,15 @@ async function readLoop() {
   await disconnect();
 }
 
+/* Accepts "millis,raw0,raw1". Tolerates a single-sensor "millis,raw0"
+   line (sensor 2 reads 0) and a header/garbage line (ignored). */
+function parseLine(line) {
+  const p = line.split(",").map((x) => parseInt(x, 10));
+  if (!p.every(isFinite)) return;
+  if (p.length >= 3)      handleSample(p[0], [p[1], p[2]]);
+  else if (p.length === 2) handleSample(p[0], [p[1], 0]);
+}
+
 async function disconnect() {
   keepReading = false;
   try { if (reader) await reader.cancel(); } catch (e) {}
@@ -401,20 +528,21 @@ async function disconnect() {
   reader = null;
   connectBtn.textContent = "Connect sensor";
   statusEl.textContent = "Disconnected";
-  updateAlarm(0);
+  handleSample(performance.now(), [0, 0]);
 }
 
 function resetStream() {
-  points.length = 0;
+  points[0].length = 0;
+  points[1].length = 0;
   firstDeviceMs = null;
-  kpaSmooth = 0;
+  kpaSmooth[0] = kpaSmooth[1] = 0;
 }
 
 /* ============================ demo mode ============================ */
 
 let demoTimer = null;
 let demoStart = 0;
-let demoPeak = 120;
+const demoPeak = [120, 110];
 
 $("demoBtn").addEventListener("click", () => {
   ensureAudio();
@@ -422,7 +550,6 @@ $("demoBtn").addEventListener("click", () => {
   if (port) disconnect();
   resetStream();
   demoStart = performance.now();
-  demoPeak = 120;
   let lastCycle = -1;
   demoTimer = setInterval(() => {
     const t = performance.now() - demoStart;
@@ -430,12 +557,18 @@ $("demoBtn").addEventListener("click", () => {
     const cycle = Math.floor(t / CYCLE);
     if (cycle !== lastCycle) {
       lastCycle = cycle;
-      demoPeak = 70 + Math.random() * 120;   // 70–190 kPa, sometimes over threshold
+      demoPeak[0] = 70 + Math.random() * 120;   // 70–190 kPa
+      demoPeak[1] = 60 + Math.random() * 120;   // independent of sensor 1
     }
-    const phase = (t % CYCLE) / CYCLE;
-    let kpa = phase < STANCE ? demoPeak * Math.sin(Math.PI * phase / STANCE) : 0;
-    kpa += Math.random() * 3;
-    handleSample(t, kpaToRaw(kpa));
+    const raws = [];
+    for (let i = 0; i < N; i++) {
+      // sensor 2 is shifted a little in the gait cycle (heel vs forefoot)
+      const ph = ((t % CYCLE) / CYCLE + (i === 1 ? 0.12 : 0)) % 1;
+      let kpa = ph < STANCE ? demoPeak[i] * Math.sin(Math.PI * ph / STANCE) : 0;
+      kpa += Math.random() * 3;
+      raws[i] = kpaToRaw(kpa, cal[i]);
+    }
+    handleSample(t, raws);
   }, 20);
   $("demoBtn").textContent = "Stop demo";
   statusEl.textContent = "Demo mode — simulated steps";
@@ -447,13 +580,17 @@ function stopDemo() {
   demoTimer = null;
   $("demoBtn").textContent = "Demo mode";
   if (!port) statusEl.textContent = "Disconnected";
-  updateAlarm(0);
+  handleSample(performance.now(), [0, 0]);
 }
 
 /* ============================== chart ============================== */
 
 const canvas = $("chart");
 const ctx = canvas.getContext("2d");
+const COLORS = [
+  getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#4da3ff",
+  getComputedStyle(document.documentElement).getPropertyValue("--s2").trim() || "#ff453a",
+];
 
 function draw() {
   const dpr = window.devicePixelRatio || 1;
@@ -468,10 +605,11 @@ function draw() {
   const padL = 46, padR = 10, padT = 12, padB = 26;
   const plotW = w - padL - padR, plotH = h - padT - padB;
 
-  const tNow = points.length ? points[points.length - 1].t : 0;
+  let tNow = 0;
+  for (let i = 0; i < N; i++) if (points[i].length) tNow = Math.max(tNow, points[i][points[i].length - 1].t);
   const tMin = Math.max(0, tNow - WINDOW_S);
   let yMax = settings.threshold * 1.5;
-  for (const p of points) if (p.kpa * 1.15 > yMax) yMax = p.kpa * 1.15;
+  for (let i = 0; i < N; i++) for (const p of points[i]) if (p.kpa * 1.15 > yMax) yMax = p.kpa * 1.15;
 
   const x = (t) => padL + ((t - tMin) / WINDOW_S) * plotW;
   const y = (kpa) => padT + plotH - (kpa / yMax) * plotH;
@@ -501,38 +639,32 @@ function draw() {
 
   // threshold line
   const ty = y(settings.threshold);
-  ctx.strokeStyle = "#ff3b30";
+  ctx.strokeStyle = COLORS_THRESHOLD;
   ctx.setLineDash([7, 5]);
   ctx.lineWidth = 1.5;
   ctx.beginPath(); ctx.moveTo(padL, ty); ctx.lineTo(w - padR, ty); ctx.stroke();
   ctx.setLineDash([]);
-  ctx.fillStyle = "#ff6b62";
+  ctx.fillStyle = COLORS_THRESHOLD;
   ctx.fillText(`threshold ${settings.threshold} kPa`, padL + 8, ty - 6);
 
-  // pressure trace
-  if (points.length > 1) {
-    ctx.strokeStyle = "#4da3ff";
+  // pressure traces
+  for (let i = 0; i < N; i++) {
+    if (points[i].length < 2) continue;
+    ctx.strokeStyle = COLORS[i];
     ctx.lineWidth = 2;
     ctx.beginPath();
     let started = false;
-    for (const p of points) {
+    for (const p of points[i]) {
       if (p.t < tMin) continue;
       if (!started) { ctx.moveTo(x(p.t), y(p.kpa)); started = true; }
       else ctx.lineTo(x(p.t), y(p.kpa));
     }
     ctx.stroke();
-
-    // soft fill under the trace
-    const last = points[points.length - 1];
-    ctx.lineTo(x(last.t), y(0));
-    ctx.lineTo(x(Math.max(tMin, points[0].t)), y(0));
-    ctx.closePath();
-    ctx.fillStyle = "rgba(77,163,255,0.08)";
-    ctx.fill();
   }
 
   requestAnimationFrame(draw);
 }
+const COLORS_THRESHOLD = getComputedStyle(document.documentElement).getPropertyValue("--threshold").trim() || "#ffb02e";
 requestAnimationFrame(draw);
 </script>
 </body>
