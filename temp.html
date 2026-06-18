@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>XIAO FSR — Temperature vs Resistance (USB)</title>
+<style>
+  :root{
+    --bg:#0e1116; --panel:#161b22; --panel2:#1c232d; --line:#2a323d;
+    --text:#e6edf3; --muted:#8b96a3; --accent:#4cc9f0; --warm:#ff8c5a;
+    --good:#3ecf8e; --bad:#ff5d5d;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+       font:14px/1.45 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+  header{padding:18px 22px;border-bottom:1px solid var(--line);display:flex;
+         align-items:center;gap:16px;flex-wrap:wrap}
+  h1{font-size:17px;margin:0;font-weight:650}
+  .sub{color:var(--muted);font-size:12.5px}
+  .wrap{max-width:1100px;margin:0 auto;padding:18px 22px 60px}
+  button{background:var(--panel2);color:var(--text);border:1px solid var(--line);
+         border-radius:8px;padding:8px 14px;font-size:13px;cursor:pointer}
+  button:hover{border-color:var(--accent)}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  button.primary{background:var(--accent);color:#04222b;border-color:var(--accent);font-weight:650}
+  .bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:18px}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--bad);display:inline-block}
+  .dot.on{background:var(--good)}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:18px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+  .card .k{color:var(--muted);font-size:11.5px;text-transform:uppercase;letter-spacing:.04em}
+  .card .v{font-size:24px;font-weight:650;margin-top:4px;font-variant-numeric:tabular-nums}
+  .card .u{color:var(--muted);font-size:13px;font-weight:400}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:18px}
+  .panel h2{font-size:13px;margin:0 0 10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+  canvas{width:100%;height:240px;display:block}
+  .legend{display:flex;gap:18px;font-size:12px;color:var(--muted);margin-top:6px}
+  .legend i{display:inline-block;width:11px;height:3px;border-radius:2px;margin-right:6px;vertical-align:middle}
+  .legend i.dotm{width:8px;height:8px;border-radius:50%}
+  .verdict{font-size:15px;line-height:1.5;padding:12px 14px;border-radius:10px;background:var(--panel2);border:1px solid var(--line)}
+  .verdict.good{border-color:var(--good)}
+  .verdict.warn{border-color:var(--warm)}
+  .verdict b{font-weight:680}
+  .row{display:flex;gap:14px;flex-wrap:wrap}
+  .row>.panel{flex:1;min-width:300px}
+  .capture{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+  .fld{display:flex;flex-direction:column;gap:4px}
+  .fld label{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+  input[type=number]{background:#0b0e13;border:1px solid var(--line);border-radius:8px;color:var(--text);
+                     padding:9px 11px;font-size:16px;width:140px;font-variant-numeric:tabular-nums}
+  input:focus{outline:none;border-color:var(--accent)}
+  table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+  th,td{text-align:right;padding:6px 8px;border-bottom:1px solid var(--line);font-size:13px}
+  th{color:var(--muted);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.03em}
+  td:first-child,th:first-child{text-align:left}
+  .x{color:var(--bad);cursor:pointer;font-weight:700}
+  .stat{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px dashed var(--line)}
+  .stat:last-child{border-bottom:0}
+  .stat .sk{color:var(--muted)}
+  .stat .sv{font-variant-numeric:tabular-nums}
+  code{background:#0b0e13;padding:1px 6px;border-radius:5px;color:var(--accent)}
+</style>
+</head>
+<body>
+<header>
+  <h1>FSR Temperature-vs-Resistance Test</h1>
+  <span class="sub">XIAO nRF52840 · USB / Web Serial · hot-plate temperature entered manually</span>
+</header>
+
+<div class="wrap">
+  <div class="bar">
+    <button id="connectBtn" class="primary">Connect (USB)</button>
+    <span><span id="dot" class="dot"></span> <span id="status">disconnected</span></span>
+    <span style="flex:1"></span>
+    <button id="csvBtn" disabled>Export CSV</button>
+    <button id="clearBtn" disabled>Clear points</button>
+  </div>
+
+  <div class="cards">
+    <div class="card"><div class="k">Live resistance</div><div class="v"><span id="cR">—</span> <span class="u">Ω</span></div></div>
+    <div class="card"><div class="k">A0 voltage</div><div class="v"><span id="cV">—</span> <span class="u">V</span></div></div>
+    <div class="card"><div class="k">Captured points</div><div class="v"><span id="cN">0</span></div></div>
+    <div class="card"><div class="k">ΔR across span</div><div class="v"><span id="cD">—</span> <span class="u">%</span></div></div>
+  </div>
+
+  <div class="panel">
+    <div class="capture">
+      <div class="fld">
+        <label>Hot-plate temperature (°C)</label>
+        <input id="tempInput" type="number" step="0.1" placeholder="e.g. 50" />
+      </div>
+      <button id="captureBtn" class="primary" disabled>Capture point</button>
+      <span class="sub" style="max-width:420px">Set the plate to a temperature, wait until the live resistance is steady,
+      read the value from the plate's display, type it here and capture. Repeat across your range.</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div id="verdict" class="verdict">Capture points at several hot-plate temperatures to evaluate the temperature effect on the FSR.</div>
+  </div>
+
+  <div class="panel">
+    <h2>Live resistance vs time (watch it settle before capturing)</h2>
+    <canvas id="tsChart"></canvas>
+    <div class="legend"><span><i style="background:var(--accent)"></i>Resistance (Ω)</span></div>
+  </div>
+
+  <div class="row">
+    <div class="panel">
+      <h2>Resistance vs Temperature</h2>
+      <canvas id="scChart"></canvas>
+      <div class="legend"><span><i class="dotm" style="background:var(--warm)"></i>captured points</span><span><i style="background:var(--good)"></i>linear fit</span></div>
+    </div>
+    <div class="panel" style="max-width:360px">
+      <h2>Temperature sensitivity</h2>
+      <div class="stat"><span class="sk">Temp span ΔT</span><span class="sv" id="sDT">—</span></div>
+      <div class="stat"><span class="sk">Slope dR/dT</span><span class="sv" id="sSlope">—</span></div>
+      <div class="stat"><span class="sk">Temp. coeff.</span><span class="sv" id="sTC">—</span></div>
+      <div class="stat"><span class="sk">ΔR over span</span><span class="sv" id="sPred">—</span></div>
+      <div class="stat"><span class="sk">Fit R²</span><span class="sv" id="sR2">—</span></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Captured points</h2>
+    <table id="tbl">
+      <thead><tr><th>#</th><th>Temp (°C)</th><th>Resistance (Ω)</th><th>ΔR vs coldest (%)</th><th></th></tr></thead>
+      <tbody id="tblBody"><tr><td colspan="5" class="sub" style="text-align:center;border:0">no points yet</td></tr></tbody>
+    </table>
+  </div>
+
+  <p class="sub">Chrome or Edge on desktop required (Web Serial). Serve over <code>localhost</code> or <code>https</code>, or open the file directly.
+  Keep the load/contact on the FSR constant while heating — otherwise thermal expansion or contact change can look like a temperature effect.</p>
+</div>
+
+<script>
+let port, reader, readableClosed = null, keepReading = false;
+let smoothR = null;
+const alpha = 0.2;                 // moderate smoothing for the live readout
+let t0 = null;
+const live = [];                   // {ts, R} for the time chart (ring)
+const avgBuf = [];                 // recent R values, averaged when capturing
+const captured = [];               // {T, R, n}
+
+const $ = id => document.getElementById(id);
+
+// ---------------- Web Serial ----------------
+async function connect(){
+  try{
+    port = await navigator.serial.requestPort();
+    await port.open({ baudRate: 115200 });
+    keepReading = true;
+    setStatus('connected', true);
+    $('connectBtn').textContent = 'Disconnect';
+    $('captureBtn').disabled = $('csvBtn').disabled = $('clearBtn').disabled = false;
+    readLoop();
+  }catch(e){ setStatus('error: ' + e.message, false); }
+}
+
+async function readLoop(){
+  const decoder = new TextDecoderStream();
+  readableClosed = port.readable.pipeTo(decoder.writable).catch(()=>{});
+  reader = decoder.readable.getReader();
+  let buf = '';
+  try{
+    while(keepReading){
+      const { value, done } = await reader.read();
+      if(done) break;
+      buf += value;
+      let i;
+      while((i = buf.indexOf('\n')) >= 0){
+        const line = buf.slice(0, i).trim();
+        buf = buf.slice(i + 1);
+        if(line) handleLine(line);
+      }
+    }
+  }catch(e){ /* read cancelled on disconnect */ }
+}
+
+async function disconnect(){
+  keepReading = false;
+  try{ if(reader){ await reader.cancel(); reader.releaseLock(); } }catch(e){}
+  try{ if(readableClosed) await readableClosed; }catch(e){}
+  try{ if(port){ await port.close(); } }catch(e){}
+  setStatus('disconnected', false);
+  $('connectBtn').textContent = 'Connect (USB)';
+}
+
+function handleLine(line){
+  // expected: "<millis>,<R_ohm>,<V>"
+  const p = line.split(',');
+  if(p.length < 2) return;
+  const ms = parseFloat(p[0]);
+  const R  = parseFloat(p[1]);
+  const V  = p.length > 2 ? parseFloat(p[2]) : NaN;
+  if(!isFinite(ms) || !isFinite(R)) return;       // ignore banners / partial lines
+
+  if(t0 === null) t0 = ms;
+  const ts = (ms - t0) / 1000;
+
+  smoothR = (smoothR === null) ? R : alpha * R + (1 - alpha) * smoothR;
+
+  $('cR').textContent = smoothR.toFixed(0);
+  $('cV').textContent = isFinite(V) ? V.toFixed(3) : '—';
+
+  live.push({ ts, R: smoothR });
+  if(live.length > 1200) live.shift();
+  avgBuf.push(smoothR);
+  if(avgBuf.length > 30) avgBuf.shift();          // ~3 s window for capture averaging
+
+  drawTimeSeries($('tsChart'), live);
+}
+
+// ---------------- capture & analysis ----------------
+function capturePoint(){
+  const T = parseFloat($('tempInput').value);
+  if(!isFinite(T)){ setStatus('enter the hot-plate temperature first', true); return; }
+  if(avgBuf.length === 0){ setStatus('no readings yet', true); return; }
+  const R = avgBuf.reduce((a,b)=>a+b,0) / avgBuf.length;
+  captured.push({ T, R, n: avgBuf.length });
+  refresh();
+}
+
+function linreg(xs, ys){
+  const n = xs.length;
+  let sx=0, sy=0, sxx=0, sxy=0, syy=0;
+  for(let i=0;i<n;i++){ sx+=xs[i]; sy+=ys[i]; sxx+=xs[i]*xs[i]; sxy+=xs[i]*ys[i]; syy+=ys[i]*ys[i]; }
+  const dx = n*sxx - sx*sx;
+  if(Math.abs(dx) < 1e-9) return null;
+  const slope = (n*sxy - sx*sy) / dx;
+  const intercept = (sy - slope*sx) / n;
+  const dy = n*syy - sy*sy;
+  const r = (dy <= 0) ? 0 : (n*sxy - sx*sy) / Math.sqrt(dx*dy);
+  return { slope, intercept, r2: r*r, meanY: sy/n,
+           tmin: Math.min(...xs), tmax: Math.max(...xs) };
+}
+
+function refresh(){
+  const pts = captured.slice().sort((a,b)=>a.T-b.T);
+  $('cN').textContent = captured.length;
+
+  // table
+  const body = $('tblBody');
+  if(pts.length === 0){
+    body.innerHTML = '<tr><td colspan="5" class="sub" style="text-align:center;border:0">no points yet</td></tr>';
+  } else {
+    const Rref = pts[0].R;   // coldest point
+    body.innerHTML = pts.map((p,i)=>{
+      const d = 100*(p.R - Rref)/Rref;
+      const idx = captured.indexOf(p);
+      return `<tr><td>${i+1}</td><td>${p.T.toFixed(1)}</td><td>${p.R.toFixed(0)}</td>`+
+             `<td>${d>=0?'+':''}${d.toFixed(2)}</td><td class="x" data-i="${idx}">✕</td></tr>`;
+    }).join('');
+    body.querySelectorAll('.x').forEach(el=>el.onclick=()=>{ captured.splice(+el.dataset.i,1); refresh(); });
+  }
+
+  const reg = pts.length >= 2 ? linreg(pts.map(p=>p.T), pts.map(p=>p.R)) : null;
+  drawScatter($('scChart'), pts, reg);
+
+  if(!reg){
+    ['sDT','sSlope','sTC','sPred','sR2'].forEach(id=>$(id).textContent='—');
+    $('cD').textContent = '—';
+    if(captured.length < 2){
+      $('verdict').className = 'verdict';
+      $('verdict').textContent = 'Capture points at several hot-plate temperatures to evaluate the temperature effect on the FSR.';
+    }
+    return;
+  }
+
+  const dT = reg.tmax - reg.tmin;
+  const tc = 100 * reg.slope / reg.meanY;
+  const predDelta = reg.slope * dT;
+  const predPct = 100 * predDelta / reg.meanY;
+
+  $('sDT').textContent    = dT.toFixed(1) + ' °C';
+  $('sSlope').textContent = reg.slope.toFixed(1) + ' Ω/°C';
+  $('sTC').textContent    = tc.toFixed(3) + ' %/°C';
+  $('sPred').textContent  = predDelta.toFixed(0) + ' Ω (' + predPct.toFixed(2) + '%)';
+  $('sR2').textContent    = reg.r2.toFixed(3);
+  $('cD').textContent     = predPct.toFixed(2);
+
+  const v = $('verdict');
+  if(dT < 5){
+    v.className = 'verdict';
+    v.innerHTML = `Temperature only spans <b>${dT.toFixed(1)} °C</b> so far. Capture points across a wider range (≥ ~10 °C) for a reliable conclusion.`;
+  } else if(Math.abs(tc) < 0.5 && Math.abs(predPct) < 5){
+    v.className = 'verdict good';
+    v.innerHTML = `<b>Temperature effect is negligible.</b> Across a <b>${dT.toFixed(1)} °C</b> change the resistance moved only <b>${predPct.toFixed(2)}%</b> (${tc.toFixed(3)} %/°C, fit R²=${reg.r2.toFixed(2)}). The FSR reading is essentially independent of temperature.`;
+  } else {
+    v.className = 'verdict warn';
+    v.innerHTML = `Measurable temperature dependence: <b>${tc.toFixed(3)} %/°C</b> → about <b>${predPct.toFixed(1)}%</b> over the ${dT.toFixed(1)} °C span (R²=${reg.r2.toFixed(2)}). Confirm the load/contact stayed constant before concluding.`;
+  }
+}
+
+// ---------------- charts (dependency-free) ----------------
+function setupCanvas(c){
+  const dpr = window.devicePixelRatio || 1;
+  const rect = c.getBoundingClientRect();
+  c.width = Math.max(1, rect.width * dpr);
+  c.height = Math.max(1, rect.height * dpr);
+  const ctx = c.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  return { ctx, w: rect.width, h: rect.height };
+}
+function niceTicks(min, max, count){
+  if(min === max){ min -= 1; max += 1; }
+  const step0 = (max - min) / count;
+  const mag = Math.pow(10, Math.floor(Math.log10(step0)));
+  const norm = step0 / mag;
+  const step = (norm < 1.5 ? 1 : norm < 3 ? 2 : norm < 7 ? 5 : 10) * mag;
+  const out = [];
+  for(let v = Math.ceil(min/step)*step; v <= max + step*1e-6; v += step) out.push(v);
+  return out;
+}
+function emptyMsg(ctx,w,h,msg){
+  ctx.clearRect(0,0,w,h);
+  ctx.fillStyle = '#8b96a3'; ctx.font = '13px sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline='middle'; ctx.fillText(msg, w/2, h/2);
+}
+
+function drawTimeSeries(c, rows){
+  const { ctx, w, h } = setupCanvas(c);
+  ctx.clearRect(0,0,w,h);
+  if(rows.length < 2){ emptyMsg(ctx,w,h,'Waiting for data…'); return; }
+  const padL=58, padR=14, padT=12, padB=26, pw=w-padL-padR, ph=h-padT-padB;
+  const ts=rows.map(d=>d.ts), Rs=rows.map(d=>d.R);
+  const tMin=ts[0], tMax=ts[ts.length-1];
+  let rMin=Math.min(...Rs), rMax=Math.max(...Rs);
+  const m=(rMax-rMin)*0.08||Math.abs(rMax)*0.02||1; rMin-=m; rMax+=m;
+  const X=t=>padL+(t-tMin)/(tMax-tMin||1)*pw;
+  const Y=r=>padT+(1-(r-rMin)/(rMax-rMin||1))*ph;
+  ctx.font='11px sans-serif'; ctx.textBaseline='middle';
+  niceTicks(rMin,rMax,5).forEach(v=>{ const y=Y(v); if(y<padT-1||y>h-padB+1) return;
+    ctx.strokeStyle='#222a34'; ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(w-padR,y); ctx.stroke();
+    ctx.fillStyle='#4cc9f0'; ctx.textAlign='right'; ctx.fillText(Math.round(v), padL-7, y); });
+  ctx.textBaseline='top'; ctx.textAlign='center'; ctx.fillStyle='#8b96a3';
+  niceTicks(tMin,tMax,6).forEach(v=>{ const x=X(v); if(x<padL-1||x>w-padR+1) return;
+    ctx.fillText(v.toFixed(0)+'s', x, h-padB+6); });
+  ctx.strokeStyle='#4cc9f0'; ctx.lineWidth=1.8; ctx.beginPath();
+  rows.forEach((d,i)=>{ const x=X(d.ts), y=Y(d.R); i?ctx.lineTo(x,y):ctx.moveTo(x,y); }); ctx.stroke();
+}
+
+function drawScatter(c, pts, reg){
+  const { ctx, w, h } = setupCanvas(c);
+  ctx.clearRect(0,0,w,h);
+  if(pts.length < 1){ emptyMsg(ctx,w,h,'Capture points to plot R vs T…'); return; }
+  const padL=58, padR=16, padT=12, padB=30, pw=w-padL-padR, ph=h-padT-padB;
+  const Ts=pts.map(p=>p.T), Rs=pts.map(p=>p.R);
+  let xMin=Math.min(...Ts), xMax=Math.max(...Ts), yMin=Math.min(...Rs), yMax=Math.max(...Rs);
+  const padv=(a,b)=>{ const m=(b-a)*0.12||Math.abs(b)*0.02||1; return [a-m,b+m]; };
+  [xMin,xMax]=padv(xMin,xMax); [yMin,yMax]=padv(yMin,yMax);
+  const X=t=>padL+(t-xMin)/(xMax-xMin||1)*pw;
+  const Y=r=>padT+(1-(r-yMin)/(yMax-yMin||1))*ph;
+  ctx.font='11px sans-serif'; ctx.textBaseline='middle';
+  niceTicks(yMin,yMax,5).forEach(v=>{ const y=Y(v); if(y<padT-1||y>h-padB+1) return;
+    ctx.strokeStyle='#222a34'; ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(w-padR,y); ctx.stroke();
+    ctx.fillStyle='#8b96a3'; ctx.textAlign='right'; ctx.fillText(Math.round(v), padL-7, y); });
+  ctx.textBaseline='top'; ctx.textAlign='center';
+  niceTicks(xMin,xMax,6).forEach(v=>{ const x=X(v); if(x<padL-1||x>w-padR+1) return;
+    ctx.fillStyle='#8b96a3'; ctx.fillText(v.toFixed(1)+'°', x, h-padB+6); });
+  if(reg){
+    ctx.strokeStyle='#3ecf8e'; ctx.lineWidth=2; ctx.beginPath();
+    ctx.moveTo(X(xMin), Y(reg.slope*xMin+reg.intercept));
+    ctx.lineTo(X(xMax), Y(reg.slope*xMax+reg.intercept)); ctx.stroke();
+  }
+  ctx.fillStyle='#ff8c5a';
+  pts.forEach(p=>{ ctx.beginPath(); ctx.arc(X(p.T), Y(p.R), 4, 0, 6.283); ctx.fill(); });
+}
+
+// ---------------- controls ----------------
+function setStatus(s, on){ $('status').textContent = s; $('dot').classList.toggle('on', !!on); }
+
+$('connectBtn').onclick = () => (port && keepReading) ? disconnect() : connect();
+$('captureBtn').onclick = capturePoint;
+$('tempInput').addEventListener('keydown', e => { if(e.key === 'Enter' && !$('captureBtn').disabled) capturePoint(); });
+$('clearBtn').onclick = () => { captured.length = 0; refresh(); };
+$('csvBtn').onclick = () => {
+  const pts = captured.slice().sort((a,b)=>a.T-b.T);
+  const Rref = pts.length ? pts[0].R : 1;
+  const rows = [['temp_C','R_ohm','deltaR_pct_vs_coldest','samples_averaged']]
+    .concat(pts.map(p=>[p.T.toFixed(2), p.R.toFixed(1), (100*(p.R-Rref)/Rref).toFixed(3), p.n]));
+  const blob = new Blob([rows.map(r=>r.join(',')).join('\n')], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'fsr_temp_vs_R_' + new Date().toISOString().slice(0,19).replace(/[:T]/g,'-') + '.csv';
+  a.click();
+};
+
+if(!navigator.serial){
+  setStatus('Web Serial not available — use Chrome or Edge on desktop', false);
+  $('connectBtn').disabled = true;
+}
+addEventListener('resize', () => { drawTimeSeries($('tsChart'), live); refresh(); });
+</script>
+</body>
+</html>
