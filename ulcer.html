@@ -93,11 +93,25 @@
   .lightLabel.alarm { color: var(--alarm); font-weight: 700; }
   .lightLabel b { display: block; font-size: 13px; color: var(--text); }
 
-  /* dose (pressure-time integral) progress toward the limit */
-  .doseBar { width: 92px; height: 7px; border-radius: 4px; background: #2a3038; overflow: hidden; }
-  .doseBar > span { display: block; height: 100%; width: 0%; background: var(--threshold); transition: width 0.15s linear, background 0.15s; }
-  .doseBar > span.full { background: var(--alarm); }
-  .doseTxt { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  /* composite-risk readout under each light */
+  .riskVal { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--text); }
+  .compRow { display: flex; justify-content: space-between; gap: 10px; width: 104px; font-size: 11.5px; color: var(--muted); }
+  .compRow .comp { font-variant-numeric: tabular-nums; color: var(--text); }
+  .compRow .comp.mod  { color: var(--threshold); }
+  .compRow .comp.high { color: var(--alarm); font-weight: 700; }
+
+  /* risk-level light colors */
+  .light.green  { background: #28b34a; border-color: #1c7d34; box-shadow: 0 0 14px 2px rgba(40,179,74,0.45); }
+  .light.yellow { background: #e8c020; border-color: #a98c14; box-shadow: 0 0 14px 2px rgba(232,192,32,0.45); }
+  .light.orange { background: #f08a24; border-color: #b36414; box-shadow: 0 0 16px 3px rgba(240,138,36,0.55); }
+  .light.red    { background: var(--alarm); }
+
+  /* baseline control row */
+  .baseRow { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .baseRow button { flex-shrink: 0; }
+  #baseInfo { font-size: 12px; color: var(--muted); line-height: 1.35; }
+  #baseInfo.capturing { color: var(--threshold); font-weight: 600; }
+  #baseInfo.ok { color: #34c759; }
 
   /* full-screen urgent alert */
   #alertBanner {
@@ -160,7 +174,7 @@
 </head>
 <body>
 <div id="vignette"></div>
-<div id="alertBanner">⚠ OFFLOAD NOW — <span id="alertWho"></span></div>
+<div id="alertBanner">⚠ HIGH LOADING — <span id="alertWho"></span></div>
 
 <header>
   <h1>🦶 Foot Pressure Monitor</h1>
@@ -180,24 +194,32 @@
     <div class="legend">
       <span><i class="swatch" style="background:var(--accent)"></i> Sensor 1</span>
       <span><i class="swatch" style="background:var(--s2)"></i> Sensor 2</span>
-      <span><i class="swatch" style="background:var(--threshold)"></i> Threshold</span>
+      <span><i class="swatch" style="background:var(--threshold)"></i> baseline PP</span>
     </div>
     <canvas id="chart"></canvas>
   </div>
 
   <div>
-    <div class="panel lights">
-      <div class="lightCell">
-        <div class="light" id="light0"></div>
-        <div class="lightLabel" id="label0"><b>Sensor 1</b>OK</div>
-        <div class="doseBar"><span id="dose0"></span></div>
-        <div class="doseTxt" id="doseTxt0">0 / 60 s</div>
+    <div class="panel">
+      <div class="baseRow">
+        <button id="baseBtn" class="secondary">Capture baseline</button>
+        <span id="baseInfo">No baseline — capture ~20 s of normal walking</span>
       </div>
-      <div class="lightCell">
-        <div class="light" id="light1"></div>
-        <div class="lightLabel" id="label1"><b>Sensor 2</b>OK</div>
-        <div class="doseBar"><span id="dose1"></span></div>
-        <div class="doseTxt" id="doseTxt1">0 / 60 s</div>
+      <div class="lights">
+        <div class="lightCell">
+          <div class="light" id="light0"></div>
+          <div class="lightLabel" id="label0"><b>Sensor 1</b>—</div>
+          <div class="riskVal" id="risk0">–</div>
+          <div class="compRow"><span>PP</span><span class="comp" id="pp0">–</span></div>
+          <div class="compRow"><span>PTI</span><span class="comp" id="ptiC0">–</span></div>
+        </div>
+        <div class="lightCell">
+          <div class="light" id="light1"></div>
+          <div class="lightLabel" id="label1"><b>Sensor 2</b>—</div>
+          <div class="riskVal" id="risk1">–</div>
+          <div class="compRow"><span>PP</span><span class="comp" id="pp1">–</span></div>
+          <div class="compRow"><span>PTI</span><span class="comp" id="ptiC1">–</span></div>
+        </div>
       </div>
     </div>
 
@@ -220,18 +242,22 @@
 
       <table class="live">
         <tr><th class="lbl"></th><th>S1</th><th>S2</th></tr>
-        <tr><td>PTI dose (kPa·s)</td><td class="val" id="vPti0">–</td><td class="val" id="vPti1">–</td></tr>
+        <tr><td>Window PP (kPa)</td><td class="val" id="vWpp0">–</td><td class="val" id="vWpp1">–</td></tr>
+        <tr><td>Window PTI (kPa·s)</td><td class="val" id="vWpti0">–</td><td class="val" id="vWpti1">–</td></tr>
+        <tr><td>Risk index</td><td class="val" id="vRisk0">–</td><td class="val" id="vRisk1">–</td></tr>
         <tr><td>Raw ADC</td><td class="val" id="vRaw0">–</td><td class="val" id="vRaw1">–</td></tr>
         <tr><td>Voltage</td><td class="val" id="vVolt0">–</td><td class="val" id="vVolt1">–</td></tr>
         <tr><td>FSR R (kΩ)</td><td class="val" id="vRes0">–</td><td class="val" id="vRes1">–</td></tr>
-        <tr><td>Cond. (µS)</td><td class="val" id="vCond0">–</td><td class="val" id="vCond1">–</td></tr>
         <tr><td>Force (N)</td><td class="val" id="vForce0">–</td><td class="val" id="vForce1">–</td></tr>
       </table>
 
       <details open>
         <summary>Settings</summary>
-        <div class="field"><label>Risk threshold (kPa)</label><input type="number" id="sThreshold" step="1"></div>
-        <div class="field"><label>Sustained-load limit (s)</label><input type="number" id="sSustain" step="5"></div>
+        <div class="field"><label>Analysis window (s)</label><input type="number" id="sWindow" step="1"></div>
+        <div class="field"><label>PTI weight (PP = 1 − this)</label><input type="number" id="sWpti" step="0.05"></div>
+        <div class="field"><label>Elevated at (× baseline)</label><input type="number" id="sElev" step="0.05"></div>
+        <div class="field"><label>Baseline PP — S1 / S2 (kPa)</label><span><input type="number" id="sBpp0" step="1" style="width:62px"> <input type="number" id="sBpp1" step="1" style="width:62px"></span></div>
+        <div class="field"><label>Baseline mean — S1 / S2 (kPa)</label><span><input type="number" id="sBmean0" step="1" style="width:62px"> <input type="number" id="sBmean1" step="1" style="width:62px"></span></div>
         <div class="field"><label>Supply Vcc (V)</label><input type="number" id="sVcc" step="0.1"></div>
         <div class="field"><label>Divider R (Ω)</label><input type="number" id="sRdiv" step="100"></div>
         <div class="field"><label>Sensor radius (mm)</label><input type="number" id="sRadius" step="0.1"></div>
@@ -262,13 +288,21 @@ const N = 2;  // number of sensors
 
 /* ============================== settings ============================== */
 
-const DEFAULTS = { threshold: 150, sustainSecs: 60, vcc: 3.3, rdiv: 47000, radius: 7.5, cal0: 33, cal1: 33, mute: false };
-const settings = Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem("fpm-settings-v2") || "{}"));
+const DEFAULTS = { window: 10, wPti: 0.6, elevated: 1.3, vcc: 3.3, rdiv: 47000, radius: 7.5, cal0: 33, cal1: 33, mute: false };
+const settings = Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem("fpm-settings-v3") || "{}"));
 const cal = [settings.cal0, settings.cal1];
+
+// Composite-index weights: risk = wPp·PP_norm + wPti·PTI_norm
+function weights() { const wPti = Math.min(Math.max(settings.wPti, 0), 1); return { wPti, wPp: 1 - wPti }; }
+
+// Per-patient baseline from a normal-walking capture (persisted separately).
+const baseline = Object.assign({ set: false, pp: [0, 0], meanP: [0, 0] },
+                               JSON.parse(localStorage.getItem("fpm-baseline") || "{}"));
+function saveBaseline() { localStorage.setItem("fpm-baseline", JSON.stringify(baseline)); }
 
 const $ = (id) => document.getElementById(id);
 const fields = {
-  threshold: $("sThreshold"), sustainSecs: $("sSustain"), vcc: $("sVcc"), rdiv: $("sRdiv"), radius: $("sRadius"),
+  window: $("sWindow"), wPti: $("sWpti"), elevated: $("sElev"), vcc: $("sVcc"), rdiv: $("sRdiv"), radius: $("sRadius"),
   cal0: $("sCal0"), cal1: $("sCal1"),
 };
 
@@ -285,7 +319,29 @@ for (const [key, el] of Object.entries(fields)) {
 $("sMute").checked = settings.mute;
 $("sMute").addEventListener("change", () => { settings.mute = $("sMute").checked; saveSettings(); });
 
-function saveSettings() { localStorage.setItem("fpm-settings-v2", JSON.stringify(settings)); }
+function saveSettings() { localStorage.setItem("fpm-settings-v3", JSON.stringify(settings)); }
+
+// Editable baseline fields (kept in sync with the captured baseline)
+const baseFields = { pp0: $("sBpp0"), pp1: $("sBpp1"), meanP0: $("sBmean0"), meanP1: $("sBmean1") };
+function refreshBaselineFields() {
+  baseFields.pp0.value = baseline.pp[0].toFixed(0);
+  baseFields.pp1.value = baseline.pp[1].toFixed(0);
+  baseFields.meanP0.value = baseline.meanP[0].toFixed(0);
+  baseFields.meanP1.value = baseline.meanP[1].toFixed(0);
+}
+refreshBaselineFields();
+for (const [key, el] of Object.entries(baseFields)) {
+  el.addEventListener("change", () => {
+    const v = parseFloat(el.value);
+    const arr = key.startsWith("pp") ? baseline.pp : baseline.meanP;
+    const idx = key.endsWith("1") ? 1 : 0;
+    if (isFinite(v) && v >= 0) arr[idx] = v;
+    if (baseline.pp[0] > 0 && baseline.pp[1] > 0) baseline.set = true;
+    saveBaseline();
+    refreshBaselineFields();
+    updateBaseInfo();
+  });
+}
 
 /* ====================== pressure conversion model ====================== */
 /* 3.3V — FSR — A(n) — 47k — GND.  Vout rises as the FSR is pressed. */
@@ -313,83 +369,241 @@ function kpaToRaw(kpa, calUsPerN) {
 
 /* ============================ data + state ============================ */
 
-const WINDOW_S = 30;
+const WINDOW_S = 30;              // chart display window (s)
 const points = [[], []];          // per sensor: { t, kpa }
 let firstDeviceMs = null;
 const kpaSmooth = [0, 0];
 const peakKpa = [0, 0];
-const dwell = [0, 0];             // seconds continuously above the risk threshold (drives the alarm)
-const pti = [0, 0];               // pressure-time integral above threshold (kPa·s) — logged as a bonus metric
-let lastT = null;                 // previous sample time (s) for dt integration
+let lastT = null;                 // previous sample time (s)
 const lastConductance = [0, 0];
 let lastDomUpdate = 0;
+
+// Composite-index live state, refreshed at ~10 Hz over the rolling analysis window.
+const winPP = [0, 0];             // peak pressure in the window (kPa)
+const winPTI = [0, 0];            // pressure-time integral over the window (kPa·s)
+const winMeanP = [0, 0];          // mean pressure in the window (= PTI/window length)
+const ppNorm = [NaN, NaN];        // winPP / baseline PP
+const ptiNorm = [NaN, NaN];       // winMeanP / baseline mean (PTI rate, window-length independent)
+const risk = [NaN, NaN];          // wPp·PP_norm + wPti·PTI_norm
+const levelIdx = [-1, -1];        // -1 none, 0 green, 1 yellow, 2 orange, 3 red
 
 function handleSample(deviceMs, raws) {
   if (firstDeviceMs === null) firstDeviceMs = deviceMs;
   const t = (deviceMs - firstDeviceMs) / 1000;
 
-  // dt between accepted samples, clamped so stream resets/gaps don't spike the integral
   let dt = 0;
   if (lastT !== null) { const d = t - lastT; if (d > 0 && d < 0.5) dt = d; }
   lastT = t;
 
   const s = [];
+  const retain = Math.max(WINDOW_S, settings.window) + 1;
   for (let i = 0; i < N; i++) {
     s[i] = rawToSample(raws[i], cal[i]);
     kpaSmooth[i] = 0.3 * s[i].kpa + 0.7 * kpaSmooth[i];
     peakKpa[i] = Math.max(peakKpa[i], kpaSmooth[i]);
     lastConductance[i] = s[i].gMicroS;
-
-    // Accumulate sustained-load time (and PTI) while above the risk threshold;
-    // reset both once the foot offloads (drops below threshold − hysteresis).
-    if (kpaSmooth[i] >= settings.threshold) { dwell[i] += dt; pti[i] += kpaSmooth[i] * dt; }
-    else if (kpaSmooth[i] < settings.threshold - HYSTERESIS_KPA) { dwell[i] = 0; pti[i] = 0; }
-
     points[i].push({ t, kpa: kpaSmooth[i] });
-    while (points[i].length && points[i][0].t < t - WINDOW_S - 1) points[i].shift();
+    while (points[i].length && points[i][0].t < t - retain) points[i].shift();
   }
+
+  if (baseCapturing) accumulateBaseline(dt);
 
   const now = performance.now();
 
-  if (recording) {                          // full-rate capture, independent of stream resets
+  if (recording) {                          // full-rate capture (risk fields step at the ~10 Hz UI rate)
     const lt = (now - recordStartPerf) / 1000;
-    recLog.push(lt.toFixed(3) + "," + raws[0] + "," + kpaSmooth[0].toFixed(2) + "," + pti[0].toFixed(2) + "," +
-                raws[1] + "," + kpaSmooth[1].toFixed(2) + "," + pti[1].toFixed(2));
+    recLog.push(lt.toFixed(3) + "," +
+      raws[0] + "," + kpaSmooth[0].toFixed(2) + "," + winPP[0].toFixed(1) + "," + winPTI[0].toFixed(1) + "," + fmt(risk[0]) + "," +
+      raws[1] + "," + kpaSmooth[1].toFixed(2) + "," + winPP[1].toFixed(1) + "," + winPTI[1].toFixed(1) + "," + fmt(risk[1]));
   }
 
-  if (now - lastDomUpdate > 100) {          // throttle text to ~10 Hz
+  if (now - lastDomUpdate > 100) {          // throttle the heavy stats + DOM to ~10 Hz
     lastDomUpdate = now;
-    for (let i = 0; i < N; i++) {
-      $("kpa" + i).textContent = kpaSmooth[i].toFixed(1);
-      $("peak" + i).textContent = peakKpa[i].toFixed(1);
-      $("vPti" + i).textContent = pti[i].toFixed(1);
-      $("vRaw" + i).textContent = s[i].raw;
-      $("vVolt" + i).textContent = s[i].vout.toFixed(3);
-      $("vRes" + i).textContent = isFinite(s[i].rFsr) ? (s[i].rFsr / 1000).toFixed(1) : "∞";
-      $("vCond" + i).textContent = s[i].gMicroS.toFixed(1);
-      $("vForce" + i).textContent = s[i].forceN.toFixed(2);
+    updateRiskAndUI(t, s);
+  }
+}
 
-      const frac = Math.min(dwell[i] / settings.sustainSecs, 1);
-      const bar = $("dose" + i);
-      bar.style.width = (frac * 100).toFixed(0) + "%";
-      bar.classList.toggle("full", frac >= 1);
-      $("doseTxt" + i).textContent = Math.floor(dwell[i]) + " / " + settings.sustainSecs + " s";
+function fmt(x) { return isFinite(x) ? x.toFixed(2) : ""; }
+
+/* peak + trapezoidal PTI + mean pressure over the last `settings.window` seconds */
+function computeWindow(i, tNow) {
+  const W = settings.window;
+  const pts = points[i];
+  let pp = 0, integ = 0, dur = 0, prev = null, any = false;
+  for (let k = 0; k < pts.length; k++) {
+    const p = pts[k];
+    if (p.t < tNow - W) { prev = p; continue; }
+    any = true;
+    if (prev) { const d = p.t - prev.t; if (d > 0 && d < 0.5) { integ += (p.kpa + prev.kpa) / 2 * d; dur += d; } }
+    if (p.kpa > pp) pp = p.kpa;
+    prev = p;
+  }
+  return { pp, pti: integ, meanP: dur > 0 ? integ / dur : (any ? pp : 0) };
+}
+
+/* Color follows the clinical AND/OR rule (more defensible than a single weighted
+   cutoff): a component is "elevated" at ≥ settings.elevated × baseline.
+     both elevated  → Red    (high peak AND sustained loading)
+     one elevated   → Yellow (caution)
+     neither        → Green
+   The weighted Risk Index is still shown as the headline number. */
+function compLevel(ppN, ptiN) {
+  if (!isFinite(ppN) || !isFinite(ptiN)) return -1;
+  const E = settings.elevated;
+  const a = ppN >= E, b = ptiN >= E;
+  return (a && b) ? 2 : (a || b) ? 1 : 0;
+}
+const LEVEL_CLASS = ["green", "yellow", "red"];
+const LEVEL_WORD  = ["NORMAL", "CAUTION", "HIGH"];
+const LEVEL_COLOR = ["#34c759", "var(--threshold)", "var(--alarm)"];
+function compClass(x) { const E = settings.elevated; if (!isFinite(x) || x < E) return "comp"; return x < E * 1.6 ? "comp mod" : "comp high"; }
+function compWord(x) {
+  if (!isFinite(x)) return "–";
+  const E = settings.elevated, m = x.toFixed(2) + "×";
+  return (x < E ? "Normal " : x < E * 1.6 ? "Elevated " : "High ") + m;
+}
+
+function updateRiskAndUI(tNow, s) {
+  const w = weights();
+  const redSensors = [];
+  for (let i = 0; i < N; i++) {
+    const win = computeWindow(i, tNow);
+    winPP[i] = win.pp; winPTI[i] = win.pti; winMeanP[i] = win.meanP;
+
+    if (baseline.set && baseline.pp[i] > 1 && baseline.meanP[i] > 0.5) {
+      ppNorm[i] = win.pp / baseline.pp[i];
+      ptiNorm[i] = win.meanP / baseline.meanP[i];
+      risk[i] = w.wPp * ppNorm[i] + w.wPti * ptiNorm[i];
+    } else {
+      ppNorm[i] = ptiNorm[i] = risk[i] = NaN;
     }
+    const lvl = compLevel(ppNorm[i], ptiNorm[i]);
+    levelIdx[i] = lvl;
+
+    const light = $("light" + i);
+    light.classList.remove("green", "yellow", "red", "alarm");
+    if (lvl >= 0) {
+      light.classList.add(LEVEL_CLASS[lvl]);
+      if (lvl === 2) { light.classList.add("alarm"); redSensors.push("Sensor " + (i + 1)); }
+    }
+
+    $("label" + i).innerHTML = "<b>Sensor " + (i + 1) + "</b>" + (lvl < 0 ? "—" : LEVEL_WORD[lvl]);
+    $("label" + i).classList.toggle("alarm", lvl === 2);
+    $("risk" + i).textContent = isFinite(risk[i]) ? risk[i].toFixed(2) : "–";
+    $("risk" + i).style.color = lvl < 0 ? "var(--muted)" : LEVEL_COLOR[lvl];
+    const ppEl = $("pp" + i), ptiEl = $("ptiC" + i);
+    ppEl.textContent = compWord(ppNorm[i]); ppEl.className = compClass(ppNorm[i]);
+    ptiEl.textContent = compWord(ptiNorm[i]); ptiEl.className = compClass(ptiNorm[i]);
+
+    $("kpa" + i).textContent = kpaSmooth[i].toFixed(1);
+    $("kpa" + i).classList.toggle("alarm", lvl === 2);
+    $("peak" + i).textContent = peakKpa[i].toFixed(1);
+    $("vWpp" + i).textContent = win.pp.toFixed(0);
+    $("vWpti" + i).textContent = win.pti.toFixed(0);
+    $("vRisk" + i).textContent = isFinite(risk[i]) ? risk[i].toFixed(2) : "–";
+    $("vRaw" + i).textContent = s[i].raw;
+    $("vVolt" + i).textContent = s[i].vout.toFixed(3);
+    $("vRes" + i).textContent = isFinite(s[i].rFsr) ? (s[i].rFsr / 1000).toFixed(1) : "∞";
+    $("vForce" + i).textContent = s[i].forceN.toFixed(2);
   }
 
-  refreshAlarms();
+  // Audible alarm at Red only; Orange/Yellow are visual.
+  const anyRed = redSensors.length > 0;
+  $("alertBanner").classList.toggle("show", anyRed);
+  $("vignette").classList.toggle("show", anyRed);
+  if (anyRed) $("alertWho").textContent = redSensors.join(" & ") + " — reduce loading (high PP & PTI)";
+  if (anyRed && !beepTimer) { beep(); beepTimer = setInterval(beep, 280); }
+  else if (!anyRed && beepTimer) { clearInterval(beepTimer); beepTimer = null; }
+}
+
+/* Return lights/risk to a neutral idle state and silence any alarm. Used when a
+   stream stops, so a red alarm can't get stuck (no further samples would re-evaluate it). */
+function idle() {
+  resetStream();
+  for (let i = 0; i < N; i++) {
+    risk[i] = ppNorm[i] = ptiNorm[i] = NaN; levelIdx[i] = -1;
+    $("light" + i).classList.remove("green", "yellow", "orange", "red", "alarm");
+    $("label" + i).innerHTML = "<b>Sensor " + (i + 1) + "</b>—";
+    $("label" + i).classList.remove("alarm");
+    $("risk" + i).textContent = "–"; $("risk" + i).style.color = "var(--muted)";
+    $("kpa" + i).textContent = "0.0"; $("kpa" + i).classList.remove("alarm");
+    $("pp" + i).textContent = "–"; $("pp" + i).className = "comp";
+    $("ptiC" + i).textContent = "–"; $("ptiC" + i).className = "comp";
+  }
+  $("alertBanner").classList.remove("show");
+  $("vignette").classList.remove("show");
+  if (beepTimer) { clearInterval(beepTimer); beepTimer = null; }
 }
 
 $("resetPeak").addEventListener("click", () => {
-  for (let i = 0; i < N; i++) {
-    peakKpa[i] = 0; pti[i] = 0; dwell[i] = 0;
-    $("peak" + i).textContent = "0.0";
-    $("vPti" + i).textContent = "0.0";
-    $("dose" + i).style.width = "0%";
-    $("dose" + i).classList.remove("full");
-    $("doseTxt" + i).textContent = "0 / " + settings.sustainSecs + " s";
-  }
+  for (let i = 0; i < N; i++) { peakKpa[i] = 0; $("peak" + i).textContent = "0.0"; }
 });
+
+/* ========================= baseline capture ========================= */
+
+let baseCapturing = false;
+let baseCapStart = 0;
+let baseCapTimer = null;
+const BASE_SECONDS = 20;
+const baseAcc = { pp: [0, 0], integ: [0, 0], dur: 0 };
+const baseInfoEl = $("baseInfo");
+
+$("baseBtn").addEventListener("click", () => {
+  ensureAudio();
+  if (baseCapturing) { finishBaseline(true); return; }
+  if (!port && !bleConnected() && !demoTimer) {
+    alert("Connect a sensor (USB/Bluetooth) or start Demo mode first, then walk normally.");
+    return;
+  }
+  baseAcc.pp = [0, 0]; baseAcc.integ = [0, 0]; baseAcc.dur = 0;
+  baseCapturing = true;
+  baseCapStart = performance.now();
+  $("baseBtn").textContent = "Stop";
+  baseCapTimer = setInterval(updateBaseInfo, 250);
+  updateBaseInfo();
+});
+
+function accumulateBaseline(dt) {
+  if (dt <= 0) return;
+  baseAcc.dur += dt;
+  for (let i = 0; i < N; i++) {
+    baseAcc.integ[i] += kpaSmooth[i] * dt;
+    if (kpaSmooth[i] > baseAcc.pp[i]) baseAcc.pp[i] = kpaSmooth[i];
+  }
+  if ((performance.now() - baseCapStart) / 1000 >= BASE_SECONDS) finishBaseline(false);
+}
+
+function finishBaseline(aborted) {
+  baseCapturing = false;
+  clearInterval(baseCapTimer); baseCapTimer = null;
+  $("baseBtn").textContent = "Capture baseline";
+  if (baseAcc.dur >= 2 && (!aborted || baseAcc.dur >= 3)) {
+    for (let i = 0; i < N; i++) {
+      baseline.pp[i] = baseAcc.pp[i];
+      baseline.meanP[i] = baseAcc.integ[i] / baseAcc.dur;
+    }
+    baseline.set = baseline.pp[0] > 0 && baseline.pp[1] > 0;
+    saveBaseline();
+    refreshBaselineFields();
+  }
+  updateBaseInfo();
+}
+
+function updateBaseInfo() {
+  if (baseCapturing) {
+    const left = Math.max(0, BASE_SECONDS - (performance.now() - baseCapStart) / 1000);
+    baseInfoEl.textContent = "Capturing… walk normally — " + left.toFixed(0) + " s left";
+    baseInfoEl.className = "capturing";
+  } else if (baseline.set) {
+    baseInfoEl.textContent = "Baseline set · S1 PP " + baseline.pp[0].toFixed(0) + " / mean " + baseline.meanP[0].toFixed(0) +
+                             " · S2 PP " + baseline.pp[1].toFixed(0) + " / mean " + baseline.meanP[1].toFixed(0) + " kPa";
+    baseInfoEl.className = "ok";
+  } else {
+    baseInfoEl.textContent = "No baseline — capture ~20 s of normal walking";
+    baseInfoEl.className = "";
+  }
+}
+updateBaseInfo();
 
 /* ============================ csv logging ============================ */
 
@@ -437,7 +651,7 @@ recordBtn.addEventListener("click", () => {
 
 downloadBtn.addEventListener("click", () => {
   if (!recLog.length) return;
-  const header = "time_s,sensor1_raw,sensor1_kPa,sensor1_PTI_kPa_s,sensor2_raw,sensor2_kPa,sensor2_PTI_kPa_s";
+  const header = "time_s,s1_raw,s1_kPa,s1_winPP_kPa,s1_winPTI_kPa_s,s1_risk,s2_raw,s2_kPa,s2_winPP_kPa,s2_winPTI_kPa_s,s2_risk";
   const csv = header + "\n" + recLog.join("\n") + "\n";
   const blob = new Blob([csv], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
@@ -454,8 +668,6 @@ downloadBtn.addEventListener("click", () => {
 
 /* ============================== alarm ============================== */
 
-const HYSTERESIS_KPA = 5;
-const alarming = [false, false];
 let beepTimer = null;
 let audioCtx = null;
 
@@ -479,31 +691,6 @@ function beep() {
   osc.stop(t0 + 0.2);
 }
 
-function refreshAlarms() {
-  const who = [];
-  for (let i = 0; i < N; i++) {
-    // Alarm latches on once load has been sustained past the time limit; it clears
-    // when the dwell timer is reset to zero by offloading (handled in handleSample).
-    const over = dwell[i] >= settings.sustainSecs;
-    if (over) who.push("Sensor " + (i + 1));
-
-    if (over !== alarming[i]) {
-      alarming[i] = over;
-      $("light" + i).classList.toggle("alarm", over);
-      $("label" + i).classList.toggle("alarm", over);
-      $("kpa" + i).classList.toggle("alarm", over);
-      $("label" + i).innerHTML = "<b>Sensor " + (i + 1) + "</b>" + (over ? "OFFLOAD" : "OK");
-    }
-  }
-
-  const anyAlarm = who.length > 0;
-  $("alertBanner").classList.toggle("show", anyAlarm);
-  $("vignette").classList.toggle("show", anyAlarm);
-  if (anyAlarm) $("alertWho").textContent = who.join(" & ") + " — over " + settings.threshold + " kPa for " + settings.sustainSecs + "+ s";
-
-  if (anyAlarm && !beepTimer) { beep(); beepTimer = setInterval(beep, 280); }
-  else if (!anyAlarm && beepTimer) { clearInterval(beepTimer); beepTimer = null; }
-}
 
 /* =========================== calibration =========================== */
 
@@ -615,7 +802,7 @@ async function disconnectSerial() {
   port = null;
   reader = null;
   connectBtn.textContent = "🔌 USB";
-  if (!bleConnected()) { setStatus("Disconnected"); handleSample(performance.now(), [0, 0]); }
+  if (!bleConnected()) { setStatus("Disconnected"); idle(); }
 }
 
 /* ------------------ Bluetooth / Web Bluetooth (Nordic UART) ------------------ */
@@ -668,7 +855,7 @@ bleBtn.addEventListener("click", async () => {
 function onBleDrop() {        // fired on an unexpected disconnect (out of range, power off)
   bleChar = null;
   bleBtn.textContent = "📶 Bluetooth";
-  if (!port) { setStatus("Bluetooth disconnected"); handleSample(performance.now(), [0, 0]); }
+  if (!port) { setStatus("Bluetooth disconnected"); idle(); }
 }
 
 async function disconnectBLE() {
@@ -682,7 +869,7 @@ async function disconnectBLE() {
     bleDevice = null;
   }
   bleBtn.textContent = "📶 Bluetooth";
-  if (!port) { setStatus("Disconnected"); handleSample(performance.now(), [0, 0]); }
+  if (!port) { setStatus("Disconnected"); idle(); }
 }
 
 function resetStream() {
@@ -691,8 +878,7 @@ function resetStream() {
   firstDeviceMs = null;
   lastT = null;
   kpaSmooth[0] = kpaSmooth[1] = 0;
-  pti[0] = pti[1] = 0;
-  dwell[0] = dwell[1] = 0;
+  for (let i = 0; i < N; i++) { winPP[i] = winPTI[i] = winMeanP[i] = 0; risk[i] = ppNorm[i] = ptiNorm[i] = NaN; }
 }
 
 /* ============================ demo mode ============================ */
@@ -709,6 +895,12 @@ $("demoBtn").addEventListener("click", () => {
   if (port) disconnectSerial();
   if (bleConnected()) disconnectBLE();
   resetStream();
+  // Seed an in-memory baseline (not persisted) so the risk index is meaningful in
+  // demo mode without a capture. Real captures/manual entry take precedence.
+  if (!baseline.set) {
+    baseline.pp = [120, 110]; baseline.meanP = [24, 21]; baseline.set = true;
+    refreshBaselineFields(); updateBaseInfo();
+  }
   demoHoldUntil[0] = demoHoldUntil[1] = 0;
   demoStart = performance.now();
   let lastCycle = -1;
@@ -720,13 +912,13 @@ $("demoBtn").addEventListener("click", () => {
       lastCycle = cycle;
       for (let i = 0; i < N; i++) {
         demoPeak[i] = (i === 0 ? 70 : 60) + Math.random() * 120;
-        // Occasionally simulate prolonged standing on a spot so the sustained-load
-        // timer builds. Mostly short holds; rarely a long stand that outlasts the
-        // limit and actually trips the alarm (tip: lower the limit to test fast).
+        // Occasionally simulate prolonged standing on a spot so windowed PP and PTI
+        // climb above baseline. Mostly short holds (→ yellow/orange); rarely a long
+        // stand that fills the window and drives the risk index to red.
         if (t > demoHoldUntil[i] && Math.random() < 0.18) {
           const longStand = Math.random() < 0.3;
-          demoHoldUntil[i] = t + (longStand ? (settings.sustainSecs + 12) * 1000 : 4000 + Math.random() * 5000);
-          demoHoldLevel[i] = 160 + Math.random() * 30;   // 160–190 kPa, clearly above 150
+          demoHoldUntil[i] = t + (longStand ? (settings.window + 8) * 1000 : 4000 + Math.random() * 5000);
+          demoHoldLevel[i] = 160 + Math.random() * 30;   // 160–190 kPa
         }
       }
     }
@@ -755,7 +947,7 @@ function stopDemo() {
   demoTimer = null;
   $("demoBtn").textContent = "Demo mode";
   if (!port && !bleConnected()) setStatus("Disconnected");
-  handleSample(performance.now(), [0, 0]);
+  idle();
 }
 
 /* ============================== chart ============================== */
@@ -783,8 +975,9 @@ function draw() {
   let tNow = 0;
   for (let i = 0; i < N; i++) if (points[i].length) tNow = Math.max(tNow, points[i][points[i].length - 1].t);
   const tMin = Math.max(0, tNow - WINDOW_S);
-  let yMax = settings.threshold * 1.5;
+  let yMax = 200;
   for (let i = 0; i < N; i++) for (const p of points[i]) if (p.kpa * 1.15 > yMax) yMax = p.kpa * 1.15;
+  if (baseline.set) for (let i = 0; i < N; i++) if (baseline.pp[i] * 1.3 > yMax) yMax = baseline.pp[i] * 1.3;
 
   const x = (t) => padL + ((t - tMin) / WINDOW_S) * plotW;
   const y = (kpa) => padT + plotH - (kpa / yMax) * plotH;
@@ -812,15 +1005,22 @@ function draw() {
   ctx.textAlign = "left";
   ctx.fillText("kPa", 6, padT + 8);
 
-  // threshold line
-  const ty = y(settings.threshold);
-  ctx.strokeStyle = COLORS_THRESHOLD;
-  ctx.setLineDash([7, 5]);
-  ctx.lineWidth = 1.5;
-  ctx.beginPath(); ctx.moveTo(padL, ty); ctx.lineTo(w - padR, ty); ctx.stroke();
-  ctx.setLineDash([]);
-  ctx.fillStyle = COLORS_THRESHOLD;
-  ctx.fillText(`threshold ${settings.threshold} kPa`, padL + 8, ty - 6);
+  // baseline peak-pressure reference line per sensor (faint, in the sensor's colour)
+  if (baseline.set) {
+    ctx.setLineDash([6, 5]);
+    ctx.lineWidth = 1.25;
+    for (let i = 0; i < N; i++) {
+      if (!(baseline.pp[i] > 0)) continue;
+      const by = y(baseline.pp[i]);
+      ctx.globalAlpha = 0.55;
+      ctx.strokeStyle = COLORS[i];
+      ctx.beginPath(); ctx.moveTo(padL, by); ctx.lineTo(w - padR, by); ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = COLORS[i];
+      ctx.fillText(`S${i + 1} baseline PP ${baseline.pp[i].toFixed(0)}`, padL + 8 + i * 150, by - 5);
+    }
+    ctx.setLineDash([]);
+  }
 
   // pressure traces
   for (let i = 0; i < N; i++) {
@@ -839,7 +1039,6 @@ function draw() {
 
   requestAnimationFrame(draw);
 }
-const COLORS_THRESHOLD = getComputedStyle(document.documentElement).getPropertyValue("--threshold").trim() || "#ffb02e";
 requestAnimationFrame(draw);
 </script>
 </body>
