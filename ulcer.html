@@ -191,13 +191,13 @@
         <div class="light" id="light0"></div>
         <div class="lightLabel" id="label0"><b>Sensor 1</b>OK</div>
         <div class="doseBar"><span id="dose0"></span></div>
-        <div class="doseTxt" id="doseTxt0">0 / 300 kPa·s</div>
+        <div class="doseTxt" id="doseTxt0">0 / 60 s</div>
       </div>
       <div class="lightCell">
         <div class="light" id="light1"></div>
         <div class="lightLabel" id="label1"><b>Sensor 2</b>OK</div>
         <div class="doseBar"><span id="dose1"></span></div>
-        <div class="doseTxt" id="doseTxt1">0 / 300 kPa·s</div>
+        <div class="doseTxt" id="doseTxt1">0 / 60 s</div>
       </div>
     </div>
 
@@ -231,7 +231,7 @@
       <details open>
         <summary>Settings</summary>
         <div class="field"><label>Risk threshold (kPa)</label><input type="number" id="sThreshold" step="1"></div>
-        <div class="field"><label>PTI dose limit (kPa·s)</label><input type="number" id="sPtiLimit" step="10"></div>
+        <div class="field"><label>Sustained-load limit (s)</label><input type="number" id="sSustain" step="5"></div>
         <div class="field"><label>Supply Vcc (V)</label><input type="number" id="sVcc" step="0.1"></div>
         <div class="field"><label>Divider R (Ω)</label><input type="number" id="sRdiv" step="100"></div>
         <div class="field"><label>Sensor radius (mm)</label><input type="number" id="sRadius" step="0.1"></div>
@@ -262,13 +262,13 @@ const N = 2;  // number of sensors
 
 /* ============================== settings ============================== */
 
-const DEFAULTS = { threshold: 140, ptiLimit: 300, vcc: 3.3, rdiv: 47000, radius: 7.5, cal0: 33, cal1: 33, mute: false };
-const settings = Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem("fpm-settings") || "{}"));
+const DEFAULTS = { threshold: 150, sustainSecs: 60, vcc: 3.3, rdiv: 47000, radius: 7.5, cal0: 33, cal1: 33, mute: false };
+const settings = Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem("fpm-settings-v2") || "{}"));
 const cal = [settings.cal0, settings.cal1];
 
 const $ = (id) => document.getElementById(id);
 const fields = {
-  threshold: $("sThreshold"), ptiLimit: $("sPtiLimit"), vcc: $("sVcc"), rdiv: $("sRdiv"), radius: $("sRadius"),
+  threshold: $("sThreshold"), sustainSecs: $("sSustain"), vcc: $("sVcc"), rdiv: $("sRdiv"), radius: $("sRadius"),
   cal0: $("sCal0"), cal1: $("sCal1"),
 };
 
@@ -285,7 +285,7 @@ for (const [key, el] of Object.entries(fields)) {
 $("sMute").checked = settings.mute;
 $("sMute").addEventListener("change", () => { settings.mute = $("sMute").checked; saveSettings(); });
 
-function saveSettings() { localStorage.setItem("fpm-settings", JSON.stringify(settings)); }
+function saveSettings() { localStorage.setItem("fpm-settings-v2", JSON.stringify(settings)); }
 
 /* ====================== pressure conversion model ====================== */
 /* 3.3V — FSR — A(n) — 47k — GND.  Vout rises as the FSR is pressed. */
@@ -318,7 +318,8 @@ const points = [[], []];          // per sensor: { t, kpa }
 let firstDeviceMs = null;
 const kpaSmooth = [0, 0];
 const peakKpa = [0, 0];
-const pti = [0, 0];               // pressure-time integral "dose" above threshold (kPa·s)
+const dwell = [0, 0];             // seconds continuously above the risk threshold (drives the alarm)
+const pti = [0, 0];               // pressure-time integral above threshold (kPa·s) — logged as a bonus metric
 let lastT = null;                 // previous sample time (s) for dt integration
 const lastConductance = [0, 0];
 let lastDomUpdate = 0;
@@ -339,10 +340,10 @@ function handleSample(deviceMs, raws) {
     peakKpa[i] = Math.max(peakKpa[i], kpaSmooth[i]);
     lastConductance[i] = s[i].gMicroS;
 
-    // Accumulate the pressure-time integral while loaded above the risk threshold;
-    // reset to zero once the foot offloads (drops below threshold − hysteresis).
-    if (kpaSmooth[i] >= settings.threshold) pti[i] += kpaSmooth[i] * dt;
-    else if (kpaSmooth[i] < settings.threshold - HYSTERESIS_KPA) pti[i] = 0;
+    // Accumulate sustained-load time (and PTI) while above the risk threshold;
+    // reset both once the foot offloads (drops below threshold − hysteresis).
+    if (kpaSmooth[i] >= settings.threshold) { dwell[i] += dt; pti[i] += kpaSmooth[i] * dt; }
+    else if (kpaSmooth[i] < settings.threshold - HYSTERESIS_KPA) { dwell[i] = 0; pti[i] = 0; }
 
     points[i].push({ t, kpa: kpaSmooth[i] });
     while (points[i].length && points[i][0].t < t - WINDOW_S - 1) points[i].shift();
@@ -368,11 +369,11 @@ function handleSample(deviceMs, raws) {
       $("vCond" + i).textContent = s[i].gMicroS.toFixed(1);
       $("vForce" + i).textContent = s[i].forceN.toFixed(2);
 
-      const frac = Math.min(pti[i] / settings.ptiLimit, 1);
+      const frac = Math.min(dwell[i] / settings.sustainSecs, 1);
       const bar = $("dose" + i);
       bar.style.width = (frac * 100).toFixed(0) + "%";
       bar.classList.toggle("full", frac >= 1);
-      $("doseTxt" + i).textContent = pti[i].toFixed(0) + " / " + settings.ptiLimit + " kPa·s";
+      $("doseTxt" + i).textContent = Math.floor(dwell[i]) + " / " + settings.sustainSecs + " s";
     }
   }
 
@@ -381,12 +382,12 @@ function handleSample(deviceMs, raws) {
 
 $("resetPeak").addEventListener("click", () => {
   for (let i = 0; i < N; i++) {
-    peakKpa[i] = 0; pti[i] = 0;
+    peakKpa[i] = 0; pti[i] = 0; dwell[i] = 0;
     $("peak" + i).textContent = "0.0";
     $("vPti" + i).textContent = "0.0";
     $("dose" + i).style.width = "0%";
     $("dose" + i).classList.remove("full");
-    $("doseTxt" + i).textContent = "0 / " + settings.ptiLimit + " kPa·s";
+    $("doseTxt" + i).textContent = "0 / " + settings.sustainSecs + " s";
   }
 });
 
@@ -481,9 +482,9 @@ function beep() {
 function refreshAlarms() {
   const who = [];
   for (let i = 0; i < N; i++) {
-    // Alarm latches on once the dose reaches the limit; it clears when the dose
-    // is reset to zero by offloading (handled in handleSample).
-    const over = pti[i] >= settings.ptiLimit;
+    // Alarm latches on once load has been sustained past the time limit; it clears
+    // when the dwell timer is reset to zero by offloading (handled in handleSample).
+    const over = dwell[i] >= settings.sustainSecs;
     if (over) who.push("Sensor " + (i + 1));
 
     if (over !== alarming[i]) {
@@ -498,7 +499,7 @@ function refreshAlarms() {
   const anyAlarm = who.length > 0;
   $("alertBanner").classList.toggle("show", anyAlarm);
   $("vignette").classList.toggle("show", anyAlarm);
-  if (anyAlarm) $("alertWho").textContent = who.join(" & ") + " — sustained pressure too high";
+  if (anyAlarm) $("alertWho").textContent = who.join(" & ") + " — over " + settings.threshold + " kPa for " + settings.sustainSecs + "+ s";
 
   if (anyAlarm && !beepTimer) { beep(); beepTimer = setInterval(beep, 280); }
   else if (!anyAlarm && beepTimer) { clearInterval(beepTimer); beepTimer = null; }
@@ -691,6 +692,7 @@ function resetStream() {
   lastT = null;
   kpaSmooth[0] = kpaSmooth[1] = 0;
   pti[0] = pti[1] = 0;
+  dwell[0] = dwell[1] = 0;
 }
 
 /* ============================ demo mode ============================ */
@@ -718,11 +720,13 @@ $("demoBtn").addEventListener("click", () => {
       lastCycle = cycle;
       for (let i = 0; i < N; i++) {
         demoPeak[i] = (i === 0 ? 70 : 60) + Math.random() * 120;
-        // Occasionally simulate prolonged standing on a spot: a 3–5 s sustained
-        // hold above the risk threshold so the PTI dose builds toward the limit.
+        // Occasionally simulate prolonged standing on a spot so the sustained-load
+        // timer builds. Mostly short holds; rarely a long stand that outlasts the
+        // limit and actually trips the alarm (tip: lower the limit to test fast).
         if (t > demoHoldUntil[i] && Math.random() < 0.18) {
-          demoHoldUntil[i] = t + 3000 + Math.random() * 2000;
-          demoHoldLevel[i] = 150 + Math.random() * 40;   // 150–190 kPa
+          const longStand = Math.random() < 0.3;
+          demoHoldUntil[i] = t + (longStand ? (settings.sustainSecs + 12) * 1000 : 4000 + Math.random() * 5000);
+          demoHoldLevel[i] = 160 + Math.random() * 30;   // 160–190 kPa, clearly above 150
         }
       }
     }
