@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BioShirt ECG Dashboard</title>
+    <style>
+        body {
+            background-color: #121212;
+            color: #ffffff;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            max-width: 800px;
+            margin-bottom: 20px;
+        }
+        .bpm-display {
+            font-size: 48px;
+            font-weight: bold;
+            color: #ff4757;
+        }
+        .bpm-display span { font-size: 20px; color: #a4b0be; font-weight: normal; }
+        button {
+            background-color: #3742fa;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        button:hover { background-color: #5352ed; }
+        canvas {
+            background-color: #1e1e1e;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            border: 1px solid #2f3542;
+        }
+        #status { margin-top: 15px; color: #7bed9f; font-size: 14px; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <button id="connectBtn">Connect BioShirt</button>
+        <div class="bpm-display"><span id="bpmValue">--</span> <span>BPM</span></div>
+    </div>
+
+    <canvas id="ecgChart" width="800" height="400"></canvas>
+    <div id="status">Ready to connect...</div>
+
+    <script>
+        // Reversed 128-bit UUIDs for Web Bluetooth standard
+        const serviceUuid = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+        const charUuid =    '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
+
+        const canvas = document.getElementById('ecgChart');
+        const ctx = canvas.getContext('2d');
+        const statusText = document.getElementById('status');
+        const bpmValue = document.getElementById('bpmValue');
+        
+        let ecgData = new Array(800).fill(0); // Holds 800 x-axis points
+        let isDrawing = false;
+
+        document.getElementById('connectBtn').addEventListener('click', async () => {
+            try {
+                statusText.innerText = "Scanning for BioShirt...";
+                const device = await navigator.bluetooth.requestDevice({
+                    filters: [{ name: 'BioShirt' }],
+                    optionalServices: [serviceUuid]
+                });
+
+                device.addEventListener('gattserverdisconnected', () => {
+                    statusText.innerText = "Disconnected.";
+                    statusText.style.color = "#ff4757";
+                });
+
+                statusText.innerText = "Connecting to GATT Server...";
+                const server = await device.gatt.connect();
+
+                statusText.innerText = "Getting Service...";
+                const service = await server.getPrimaryService(serviceUuid);
+
+                statusText.innerText = "Getting Characteristic...";
+                const characteristic = await service.getCharacteristic(charUuid);
+
+                await characteristic.startNotifications();
+                characteristic.addEventListener('characteristicvaluechanged', handleNotifications);
+                
+                statusText.innerText = "Connected & Receiving Data!";
+                statusText.style.color = "#7bed9f";
+                
+                if(!isDrawing) {
+                    isDrawing = true;
+                    drawChart();
+                }
+
+            } catch (error) {
+                console.error(error);
+                statusText.innerText = "Error: " + error.message;
+                statusText.style.color = "#ff4757";
+            }
+        });
+
+        function handleNotifications(event) {
+            const decoder = new TextDecoder('utf-8');
+            const value = decoder.decode(event.target.value);
+            
+            // Expected format: "ecgFloat,bpmInt"
+            const parts = value.split(',');
+            if (parts.length === 2) {
+                const ecg = parseFloat(parts[0]);
+                const bpm = parseInt(parts[1]);
+
+                // Update text
+                if(!isNaN(bpm)) bpmValue.innerText = bpm;
+
+                // Shift array left and add new ECG value
+                if(!isNaN(ecg)) {
+                    ecgData.shift();
+                    ecgData.push(ecg);
+                }
+            }
+        }
+
+        function drawChart() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw grid
+            ctx.strokeStyle = '#2f3542';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            for(let y=0; y<canvas.height; y+=40) { ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); }
+            for(let x=0; x<canvas.width; x+=40) { ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); }
+            ctx.stroke();
+
+            // Draw ECG trace
+            ctx.strokeStyle = '#2ed573';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+
+            // Scale factor to fit the wave vertically (Adjust the '1.5' if wave is too big/small)
+            const centerY = canvas.height / 2;
+            const scaleY = 1.5; 
+
+            for (let i = 0; i < ecgData.length; i++) {
+                const x = i;
+                // Invert Y axis so positive spikes go UP
+                const y = centerY - (ecgData[i] * scaleY); 
+                
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+
+            requestAnimationFrame(drawChart);
+        }
+    </script>
+</body>
+</html>
