@@ -45,8 +45,20 @@
             box-shadow: 0 4px 6px rgba(0,0,0,0.3);
             border: 1px solid #2f3542;
         }
-        #status { margin-top: 15px; color: #7bed9f; font-size: 14px; }
-        .warning { color: #ffa502; font-size: 12px; margin-top: 5px; }
+        #status { margin-top: 15px; color: #7bed9f; font-size: 16px; font-weight: bold; }
+        .warning { color: #ffa502; font-size: 13px; margin-top: 5px; }
+        #rawData {
+            margin-top: 20px;
+            font-family: monospace;
+            color: #747d8c;
+            font-size: 12px;
+            background: #2f3542;
+            padding: 8px 16px;
+            border-radius: 4px;
+            width: 100%;
+            max-width: 768px;
+            text-align: left;
+        }
     </style>
 </head>
 <body>
@@ -57,14 +69,18 @@
     </div>
 
     <canvas id="ecgChart" width="800" height="400"></canvas>
+    
     <div id="status">Ready to connect...</div>
     <div class="warning">Note: Close the Arduino Serial Monitor before connecting!</div>
+    
+    <div id="rawData">Waiting for data stream...</div>
 
     <script>
         const canvas = document.getElementById('ecgChart');
         const ctx = canvas.getContext('2d');
         const statusText = document.getElementById('status');
         const bpmValue = document.getElementById('bpmValue');
+        const rawDataLog = document.getElementById('rawData');
         
         let ecgData = new Array(800).fill(0);
         let isDrawing = false;
@@ -76,11 +92,12 @@
                     throw new Error("Web Serial API not supported in this browser. Please use Chrome or Edge.");
                 }
 
-                // Request COM port from the user
                 const port = await navigator.serial.requestPort();
                 
-                // Open the port at the matching baud rate
                 await port.open({ baudRate: 115200 });
+                
+                // FIX: Force DTR and RTS signals so native USB stacks know the host is listening
+                await port.setSignals({ dataTerminalReady: true, requestToSend: true });
                 
                 statusText.innerText = "Connected & Receiving USB Data!";
                 statusText.style.color = "#7bed9f";
@@ -90,7 +107,6 @@
                     drawChart();
                 }
 
-                // Set up the reader to continuously read from the USB stream
                 const decoder = new TextDecoderStream();
                 const inputDone = port.readable.pipeTo(decoder.writable);
                 const inputStream = decoder.readable;
@@ -113,7 +129,6 @@
                     processBuffer();
                 }
                 if (done) {
-                    console.log('[readLoop] DONE', done);
                     reader.releaseLock();
                     break;
                 }
@@ -121,15 +136,15 @@
         }
 
         function processBuffer() {
-            // Split the incoming stream by newline to isolate individual readings
             let lines = serialBuffer.split('\n');
-            
-            // Keep the last partial line in the buffer to combine with the next chunk of data
-            serialBuffer = lines.pop();
+            serialBuffer = lines.pop(); // Keep the incomplete line for the next chunk
 
             lines.forEach(line => {
                 line = line.trim();
                 if (line.length === 0) return;
+
+                // Debug: Show the raw data arriving so we know hardware is transmitting
+                rawDataLog.innerText = "Raw RX: " + line;
 
                 // Expected Format: Raw,Filtered,QRS,LeadsOff,BPM
                 const parts = line.split(',');
@@ -152,7 +167,6 @@
         function drawChart() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
-            // Draw grid
             ctx.strokeStyle = '#2f3542';
             ctx.lineWidth = 1;
             ctx.beginPath();
@@ -160,13 +174,12 @@
             for(let x=0; x<canvas.width; x+=40) { ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); }
             ctx.stroke();
 
-            // Draw ECG trace
             ctx.strokeStyle = '#2ed573';
             ctx.lineWidth = 2;
             ctx.beginPath();
 
             const centerY = canvas.height / 2;
-            // Adjust this scaling multiplier to fit the wave neatly on the screen
+            // Increase or decrease scaleY to fit your specific ECG voltage sweep
             const scaleY = 1.5; 
 
             for (let i = 0; i < ecgData.length; i++) {
