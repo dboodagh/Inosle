@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BioShirt ECG Dashboard</title>
+    <title>BioShirt ECG Dashboard (USB)</title>
     <style>
         body {
             background-color: #121212;
@@ -29,7 +29,7 @@
         }
         .bpm-display span { font-size: 20px; color: #a4b0be; font-weight: normal; }
         button {
-            background-color: #3742fa;
+            background-color: #009432;
             color: white;
             border: none;
             padding: 12px 24px;
@@ -38,7 +38,7 @@
             cursor: pointer;
             transition: 0.2s;
         }
-        button:hover { background-color: #5352ed; }
+        button:hover { background-color: #05c46b; }
         canvas {
             background-color: #1e1e1e;
             border-radius: 12px;
@@ -46,22 +46,21 @@
             border: 1px solid #2f3542;
         }
         #status { margin-top: 15px; color: #7bed9f; font-size: 14px; }
+        .warning { color: #ffa502; font-size: 12px; margin-top: 5px; }
     </style>
 </head>
 <body>
 
     <div class="header">
-        <button id="connectBtn">Connect BioShirt</button>
+        <button id="connectBtn">Connect USB (Serial)</button>
         <div class="bpm-display"><span id="bpmValue">--</span> <span>BPM</span></div>
     </div>
 
     <canvas id="ecgChart" width="800" height="400"></canvas>
     <div id="status">Ready to connect...</div>
+    <div class="warning">Note: Close the Arduino Serial Monitor before connecting!</div>
 
     <script>
-        const serviceUuid = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
-        const charUuid =    '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
-
         const canvas = document.getElementById('ecgChart');
         const ctx = canvas.getContext('2d');
         const statusText = document.getElementById('status');
@@ -69,39 +68,35 @@
         
         let ecgData = new Array(800).fill(0);
         let isDrawing = false;
+        let serialBuffer = "";
 
         document.getElementById('connectBtn').addEventListener('click', async () => {
             try {
-                statusText.innerText = "Scanning for BioShirt...";
-                const device = await navigator.bluetooth.requestDevice({
-                    filters: [{ name: 'BioShirt' }],
-                    optionalServices: [serviceUuid]
-                });
+                if (!('serial' in navigator)) {
+                    throw new Error("Web Serial API not supported in this browser. Please use Chrome or Edge.");
+                }
 
-                device.addEventListener('gattserverdisconnected', () => {
-                    statusText.innerText = "Disconnected.";
-                    statusText.style.color = "#ff4757";
-                });
-
-                statusText.innerText = "Connecting to GATT Server...";
-                const server = await device.gatt.connect();
-
-                statusText.innerText = "Getting Service...";
-                const service = await server.getPrimaryService(serviceUuid);
-
-                statusText.innerText = "Getting Characteristic...";
-                const characteristic = await service.getCharacteristic(charUuid);
-
-                await characteristic.startNotifications();
-                characteristic.addEventListener('characteristicvaluechanged', handleNotifications);
+                // Request COM port from the user
+                const port = await navigator.serial.requestPort();
                 
-                statusText.innerText = "Connected & Receiving Data!";
+                // Open the port at the matching baud rate
+                await port.open({ baudRate: 115200 });
+                
+                statusText.innerText = "Connected & Receiving USB Data!";
                 statusText.style.color = "#7bed9f";
-                
-                if(!isDrawing) {
+
+                if (!isDrawing) {
                     isDrawing = true;
                     drawChart();
                 }
+
+                // Set up the reader to continuously read from the USB stream
+                const decoder = new TextDecoderStream();
+                const inputDone = port.readable.pipeTo(decoder.writable);
+                const inputStream = decoder.readable;
+                const reader = inputStream.getReader();
+
+                readLoop(reader);
 
             } catch (error) {
                 console.error(error);
@@ -110,32 +105,54 @@
             }
         });
 
-        function handleNotifications(event) {
-            const decoder = new TextDecoder('utf-8');
-            const value = decoder.decode(event.target.value);
-            
-            // Expected batched format: "e1,e2,e3,e4,e5,e6,e7,e8,e9,e10|bpm"
-            const mainParts = value.split('|');
-            if (mainParts.length === 2) {
-                const ecgBatch = mainParts[0].split(',');
-                const bpm = parseInt(mainParts[1]);
-
-                if(!isNaN(bpm)) bpmValue.innerText = bpm;
-
-                // Push all 10 high-resolution samples into the chart array
-                ecgBatch.forEach(point => {
-                    const ecg = parseFloat(point);
-                    if(!isNaN(ecg)) {
-                        ecgData.shift();
-                        ecgData.push(ecg);
-                    }
-                });
+        async function readLoop(reader) {
+            while (true) {
+                const { value, done } = await reader.read();
+                if (value) {
+                    serialBuffer += value;
+                    processBuffer();
+                }
+                if (done) {
+                    console.log('[readLoop] DONE', done);
+                    reader.releaseLock();
+                    break;
+                }
             }
+        }
+
+        function processBuffer() {
+            // Split the incoming stream by newline to isolate individual readings
+            let lines = serialBuffer.split('\n');
+            
+            // Keep the last partial line in the buffer to combine with the next chunk of data
+            serialBuffer = lines.pop();
+
+            lines.forEach(line => {
+                line = line.trim();
+                if (line.length === 0) return;
+
+                // Expected Format: Raw,Filtered,QRS,LeadsOff,BPM
+                const parts = line.split(',');
+                if (parts.length >= 5) {
+                    const filtECG = parseFloat(parts[1]);
+                    const bpm = parseInt(parts[4]);
+
+                    if (!isNaN(bpm) && bpm > 0) {
+                        bpmValue.innerText = bpm;
+                    }
+
+                    if (!isNaN(filtECG)) {
+                        ecgData.shift();
+                        ecgData.push(filtECG);
+                    }
+                }
+            });
         }
 
         function drawChart() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
+            // Draw grid
             ctx.strokeStyle = '#2f3542';
             ctx.lineWidth = 1;
             ctx.beginPath();
@@ -143,11 +160,13 @@
             for(let x=0; x<canvas.width; x+=40) { ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); }
             ctx.stroke();
 
+            // Draw ECG trace
             ctx.strokeStyle = '#2ed573';
             ctx.lineWidth = 2;
             ctx.beginPath();
 
             const centerY = canvas.height / 2;
+            // Adjust this scaling multiplier to fit the wave neatly on the screen
             const scaleY = 1.5; 
 
             for (let i = 0; i < ecgData.length; i++) {
