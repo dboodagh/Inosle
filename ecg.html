@@ -59,7 +59,6 @@
     <div id="status">Ready to connect...</div>
 
     <script>
-        // Reversed 128-bit UUIDs for Web Bluetooth standard
         const serviceUuid = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
         const charUuid =    '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
 
@@ -68,7 +67,7 @@
         const statusText = document.getElementById('status');
         const bpmValue = document.getElementById('bpmValue');
         
-        let ecgData = new Array(800).fill(0); // Holds 800 x-axis points
+        let ecgData = new Array(800).fill(0);
         let isDrawing = false;
 
         document.getElementById('connectBtn').addEventListener('click', async () => {
@@ -115,27 +114,28 @@
             const decoder = new TextDecoder('utf-8');
             const value = decoder.decode(event.target.value);
             
-            // Expected format: "ecgFloat,bpmInt"
-            const parts = value.split(',');
-            if (parts.length === 2) {
-                const ecg = parseFloat(parts[0]);
-                const bpm = parseInt(parts[1]);
+            // Expected batched format: "e1,e2,e3,e4,e5,e6,e7,e8,e9,e10|bpm"
+            const mainParts = value.split('|');
+            if (mainParts.length === 2) {
+                const ecgBatch = mainParts[0].split(',');
+                const bpm = parseInt(mainParts[1]);
 
-                // Update text
                 if(!isNaN(bpm)) bpmValue.innerText = bpm;
 
-                // Shift array left and add new ECG value
-                if(!isNaN(ecg)) {
-                    ecgData.shift();
-                    ecgData.push(ecg);
-                }
+                // Push all 10 high-resolution samples into the chart array
+                ecgBatch.forEach(point => {
+                    const ecg = parseFloat(point);
+                    if(!isNaN(ecg)) {
+                        ecgData.shift();
+                        ecgData.push(ecg);
+                    }
+                });
             }
         }
 
         function drawChart() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
-            // Draw grid
             ctx.strokeStyle = '#2f3542';
             ctx.lineWidth = 1;
             ctx.beginPath();
@@ -143,18 +143,15 @@
             for(let x=0; x<canvas.width; x+=40) { ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); }
             ctx.stroke();
 
-            // Draw ECG trace
             ctx.strokeStyle = '#2ed573';
             ctx.lineWidth = 2;
             ctx.beginPath();
 
-            // Scale factor to fit the wave vertically (Adjust the '1.5' if wave is too big/small)
             const centerY = canvas.height / 2;
             const scaleY = 1.5; 
 
             for (let i = 0; i < ecgData.length; i++) {
                 const x = i;
-                // Invert Y axis so positive spikes go UP
                 const y = centerY - (ecgData[i] * scaleY); 
                 
                 if (i === 0) ctx.moveTo(x, y);
