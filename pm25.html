@@ -42,6 +42,9 @@
   canvas{max-height:280px}
   .foot{margin-top:16px;color:var(--muted);font-size:12px;line-height:1.6}
   code{background:var(--panel2);padding:1px 6px;border-radius:5px}
+  #log{background:#0b1120;border:1px solid var(--line);border-radius:8px;padding:10px;
+       margin:0;max-height:180px;overflow:auto;font-size:12px;line-height:1.5;
+       color:#b9c6e0;white-space:pre-wrap;font-family:ui-monospace,Menlo,monospace}
 </style>
 </head>
 <body>
@@ -83,10 +86,25 @@
     </div>
   </div>
 
+  <div class="chart-box" style="margin-top:16px">
+    <h3 style="display:flex;justify-content:space-between;align-items:center">
+      Connection log
+      <button id="clrLog" class="ghost" style="padding:4px 10px;font-size:12px">clear</button>
+    </h3>
+    <pre id="log"></pre>
+  </div>
+
   <div class="foot">
     Firmware sends one line per second: <code>AQ,pm10s,pm25s,pm100s,pm10e,pm25e,pm100e,p03,p05,p10,p25,p50,p100</code>.
     Cards & mass chart use the <b>standard</b> concentration.
     Web Serial / Web Bluetooth need Chrome or Edge (desktop). Bluetooth also works on Android Chrome.
+    <br><br>
+    <b>BLE connects but no data?</b> Check the connection log above.
+    If it says notifications started but no data arrives: the most common cause is that the board
+    is <b>still connected over USB to a serial monitor</b> — close the Arduino Serial Monitor (and this app's
+    USB connection) so the firmware loop isn't blocked, then reconnect over BLE. Also make sure only
+    <b>one</b> app/tab is connected to the board's Bluetooth at a time (phone apps like nRF Connect / LightBlue
+    will hold the connection and block the browser).
   </div>
 
 <script>
@@ -99,6 +117,15 @@ const UART_TX_CHAR  = '6e400003-b5a3-f393-e0a9-e50e24dcca9e'; // notify (device 
 let serialPort=null, serialReader=null, keepReadingSerial=false;
 let bleDevice=null, bleChar=null;
 const rows=[]; // stored parsed rows for CSV export
+
+// ---------- log panel ----------
+const logEl=document.getElementById('log');
+function log(msg){
+  const line='['+new Date().toLocaleTimeString()+'] '+msg;
+  logEl.textContent+=(logEl.textContent?'\n':'')+line;
+  logEl.scrollTop=logEl.scrollHeight;
+  console.log(line);
+}
 
 // ---------- charts ----------
 const t=[]; // time labels
@@ -141,7 +168,11 @@ function computeAQI(pm25){
 // ---------- handle one parsed reading ----------
 function handleLine(line){
   line=line.trim();
-  if(!line.startsWith('AQ,')) return;      // ignore INFO/ERR/partial lines
+  if(!line) return;
+  if(!line.startsWith('AQ,')){             // firmware INFO/ERR or a partial chunk
+    if(line.startsWith('INFO,')||line.startsWith('ERR,')) log('device: '+line);
+    return;
+  }
   const p=line.split(',');
   if(p.length<13) return;
   const n=p.slice(1).map(Number);
@@ -226,18 +257,31 @@ async function readSerialLoop(){
 async function connectBLE(){
   if(!('bluetooth' in navigator)){alert('Web Bluetooth not supported. Use Chrome/Edge desktop or Android Chrome.');return;}
   try{
+    log('BLE: requesting device…');
     bleDevice=await navigator.bluetooth.requestDevice({
       filters:[{namePrefix:'XIAO'}],
       optionalServices:[UART_SERVICE]
     });
+    log('BLE: selected "'+bleDevice.name+'", connecting GATT…');
     bleDevice.addEventListener('gattserverdisconnected',onBleDisconnect);
     const server=await bleDevice.gatt.connect();
+    log('BLE: GATT connected, getting UART service…');
     const svc=await server.getPrimaryService(UART_SERVICE);
-    bleChar=await svc.getCharacteristic(UART_TX_CHAR);
-    let buf='';
+
+    // Find a characteristic that supports notify (don't assume the UUID).
+    const chars=await svc.getCharacteristics();
+    log('BLE: service has '+chars.length+' characteristic(s): '+
+        chars.map(c=>c.uuid.slice(4,8)+(c.properties.notify?'(notify)':'')).join(', '));
+    bleChar=chars.find(c=>c.properties.notify) || null;
+    if(!bleChar){ throw new Error('No notify characteristic found in UART service'); }
+    log('BLE: subscribing to '+bleChar.uuid.slice(4,8)+' for notifications…');
+
+    let buf='', gotAny=false;
     const dec=new TextDecoder();
     bleChar.addEventListener('characteristicvaluechanged',ev=>{
-      buf+=dec.decode(ev.target.value);
+      const chunk=dec.decode(ev.target.value);
+      if(!gotAny){ gotAny=true; log('BLE: first notification received ✓'); }
+      buf+=chunk;
       let i;
       while((i=buf.indexOf('\n'))>=0){
         handleLine(buf.slice(0,i));
@@ -245,8 +289,11 @@ async function connectBLE(){
       }
     });
     await bleChar.startNotifications();
+    log('BLE: notifications started. Waiting for data (device sends ~1/sec)…');
     setConnected(true,'Connected via Bluetooth');
-  }catch(e){ console.error(e); setConnected(false,'Bluetooth connection failed'); }
+    // Warn if nothing arrives within a few seconds.
+    setTimeout(()=>{ if(!gotAny) log('BLE: ⚠ still no data after 4s — see troubleshooting note below.'); },4000);
+  }catch(e){ console.error(e); log('BLE ERROR: '+e.message); setConnected(false,'Bluetooth connection failed'); }
 }
 function onBleDisconnect(){ setConnected(false,'Bluetooth disconnected'); bleChar=null; }
 
@@ -280,6 +327,7 @@ document.getElementById('usbBtn').onclick=connectUSB;
 document.getElementById('bleBtn').onclick=connectBLE;
 document.getElementById('disBtn').onclick=disconnect;
 document.getElementById('csvBtn').onclick=exportCSV;
+document.getElementById('clrLog').onclick=()=>{logEl.textContent='';};
 </script>
 </body>
 </html>
