@@ -117,6 +117,7 @@ const UART_TX_CHAR  = '6e400003-b5a3-f393-e0a9-e50e24dcca9e'; // notify (device 
 let serialPort=null, serialReader=null, keepReadingSerial=false;
 let bleDevice=null, bleChar=null;
 const rows=[]; // stored parsed rows for CSV export
+let dbgReject=0; // limit how many rejected-line messages we log
 
 // ---------- log panel ----------
 const logEl=document.getElementById('log');
@@ -174,9 +175,9 @@ function handleLine(line){
     return;
   }
   const p=line.split(',');
-  if(p.length<13) return;
+  if(p.length<13){ if(dbgReject<4){log('reject: only '+p.length+' fields → '+JSON.stringify(line)); dbgReject++;} return; }
   const n=p.slice(1).map(Number);
-  if(n.some(isNaN)) return;
+  if(n.some(isNaN)){ if(dbgReject<4){log('reject: non-numeric → '+JSON.stringify(line)); dbgReject++;} return; }
   const r={pm1:n[0],pm25:n[1],pm10:n[2],
            pm1e:n[3],pm25e:n[4],pm10e:n[5],
            p03:n[6],p05:n[7],p10:n[8],p25:n[9],p50:n[10],p100:n[11],
@@ -276,15 +277,18 @@ async function connectBLE(){
     if(!bleChar){ throw new Error('No notify characteristic found in UART service'); }
     log('BLE: subscribing to '+bleChar.uuid.slice(4,8)+' for notifications…');
 
-    let buf='', gotAny=false;
+    let buf='', gotAny=false, dbgLines=0, dbgChunks=0;
     const dec=new TextDecoder();
     bleChar.addEventListener('characteristicvaluechanged',ev=>{
       const chunk=dec.decode(ev.target.value);
       if(!gotAny){ gotAny=true; log('BLE: first notification received ✓'); }
+      if(dbgChunks<6){ log('BLE raw chunk['+dbgChunks+']: '+JSON.stringify(chunk)); dbgChunks++; }
       buf+=chunk;
       let i;
       while((i=buf.indexOf('\n'))>=0){
-        handleLine(buf.slice(0,i));
+        const one=buf.slice(0,i);
+        if(dbgLines<4){ log('BLE line['+dbgLines+']: '+JSON.stringify(one)); dbgLines++; }
+        handleLine(one);
         buf=buf.slice(i+1);
       }
     });
