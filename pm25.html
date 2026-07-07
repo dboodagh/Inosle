@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PMS5003 Air Quality Monitor</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0f1420; --panel:#171e2e; --panel2:#1e2739; --line:#2a3550;
+    --txt:#e6ecf7; --muted:#8b98b5; --accent:#4da3ff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+       background:var(--bg);color:var(--txt);padding:18px;}
+  h1{font-size:20px;margin:0 0 2px}
+  .sub{color:var(--muted);font-size:13px;margin-bottom:16px}
+  .bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:18px}
+  button{background:var(--accent);color:#06101f;border:0;border-radius:8px;
+         padding:10px 16px;font-size:14px;font-weight:600;cursor:pointer}
+  button.ghost{background:var(--panel2);color:var(--txt);border:1px solid var(--line)}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  .status{font-size:13px;color:var(--muted);margin-left:auto}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;
+       background:#5a6580;margin-right:6px;vertical-align:middle}
+  .dot.on{background:#39d98a}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+         gap:12px;margin-bottom:18px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
+  .card .label{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.4px}
+  .card .val{font-size:30px;font-weight:700;margin-top:4px}
+  .card .unit{font-size:13px;color:var(--muted);font-weight:400}
+  .aqi{grid-column:span 2;display:flex;align-items:center;gap:16px}
+  .aqi .badge{min-width:96px;height:96px;border-radius:14px;display:flex;
+       flex-direction:column;align-items:center;justify-content:center;color:#0b0f18;font-weight:800}
+  .aqi .badge .num{font-size:34px;line-height:1}
+  .aqi .badge .cat{font-size:11px;font-weight:700;margin-top:3px}
+  .charts{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:820px){.charts{grid-template-columns:1fr}.aqi{grid-column:span 2}}
+  .chart-box{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
+  .chart-box h3{margin:0 0 10px;font-size:14px;font-weight:600}
+  canvas{max-height:280px}
+  .foot{margin-top:16px;color:var(--muted);font-size:12px;line-height:1.6}
+  code{background:var(--panel2);padding:1px 6px;border-radius:5px}
+</style>
+</head>
+<body>
+  <h1>PMS5003 Air Quality Monitor</h1>
+  <div class="sub">XIAO nRF52840 Sense · connect over USB (Web Serial) or Bluetooth (Web Bluetooth)</div>
+
+  <div class="bar">
+    <button id="usbBtn">🔌 Connect USB</button>
+    <button id="bleBtn">📶 Connect Bluetooth</button>
+    <button id="disBtn" class="ghost" disabled>Disconnect</button>
+    <button id="csvBtn" class="ghost" disabled>⬇ Export CSV</button>
+    <span class="status"><span id="dot" class="dot"></span><span id="statusText">Not connected</span></span>
+  </div>
+
+  <div class="cards">
+    <div class="card aqi">
+      <div id="aqiBadge" class="badge" style="background:#5a6580">
+        <div class="num" id="aqiNum">--</div>
+        <div class="cat" id="aqiCat">AQI</div>
+      </div>
+      <div>
+        <div class="label">US AQI (from PM2.5)</div>
+        <div id="aqiDesc" class="unit" style="margin-top:6px;max-width:260px">Waiting for data…</div>
+      </div>
+    </div>
+    <div class="card"><div class="label">PM 1.0</div><div class="val"><span id="pm1">--</span><span class="unit"> µg/m³</span></div></div>
+    <div class="card"><div class="label">PM 2.5</div><div class="val"><span id="pm25">--</span><span class="unit"> µg/m³</span></div></div>
+    <div class="card"><div class="label">PM 10</div><div class="val"><span id="pm10">--</span><span class="unit"> µg/m³</span></div></div>
+  </div>
+
+  <div class="charts">
+    <div class="chart-box">
+      <h3>Mass concentration (µg/m³)</h3>
+      <canvas id="massChart"></canvas>
+    </div>
+    <div class="chart-box">
+      <h3>Particle counts (per 0.1L)</h3>
+      <canvas id="countChart"></canvas>
+    </div>
+  </div>
+
+  <div class="foot">
+    Firmware sends one line per second: <code>AQ,pm10s,pm25s,pm100s,pm10e,pm25e,pm100e,p03,p05,p10,p25,p50,p100</code>.
+    Cards & mass chart use the <b>standard</b> concentration.
+    Web Serial / Web Bluetooth need Chrome or Edge (desktop). Bluetooth also works on Android Chrome.
+  </div>
+
+<script>
+// ---------- config ----------
+const MAX_POINTS = 120;                 // ~2 min of history at 1 Hz
+const UART_SERVICE = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+const UART_TX_CHAR  = '6e400003-b5a3-f393-e0a9-e50e24dcca9e'; // notify (device -> app)
+
+// ---------- state ----------
+let serialPort=null, serialReader=null, keepReadingSerial=false;
+let bleDevice=null, bleChar=null;
+const rows=[]; // stored parsed rows for CSV export
+
+// ---------- charts ----------
+const t=[]; // time labels
+const ds=(label,color)=>({label,data:[],borderColor:color,backgroundColor:color,
+  borderWidth:2,pointRadius:0,tension:.25});
+const gridOpt={color:'#2a3550'}, tickOpt={color:'#8b98b5',maxTicksLimit:6};
+const baseOpts={responsive:true,animation:false,interaction:{mode:'index',intersect:false},
+  plugins:{legend:{labels:{color:'#e6ecf7',boxWidth:12}}},
+  scales:{x:{grid:gridOpt,ticks:tickOpt},y:{grid:gridOpt,ticks:{color:'#8b98b5'},beginAtZero:true}}};
+
+const massChart=new Chart(document.getElementById('massChart'),{type:'line',
+  data:{labels:t,datasets:[ds('PM1.0','#4da3ff'),ds('PM2.5','#f5a623'),ds('PM10','#ff5c7a')]},
+  options:baseOpts});
+const countChart=new Chart(document.getElementById('countChart'),{type:'line',
+  data:{labels:t,datasets:[ds('>0.3µm','#4da3ff'),ds('>0.5µm','#39d98a'),ds('>1.0µm','#f5a623'),
+    ds('>2.5µm','#ff5c7a'),ds('>5.0µm','#b06cff'),ds('>10µm','#8b98b5')]},
+  options:baseOpts});
+
+// ---------- US AQI from PM2.5 ----------
+const AQI_BP=[
+  [0,12,0,50,'Good','#39d98a','Air quality is satisfactory.'],
+  [12.1,35.4,51,100,'Moderate','#f5d94a','Acceptable; unusually sensitive people should limit prolonged outdoor exertion.'],
+  [35.5,55.4,101,150,'Unhealthy (sensitive)','#f5a623','Sensitive groups may experience health effects.'],
+  [55.5,150.4,151,200,'Unhealthy','#ff5c7a','Everyone may begin to experience health effects.'],
+  [150.5,250.4,201,300,'Very Unhealthy','#b06cff','Health alert: everyone may experience serious effects.'],
+  [250.5,500.4,301,500,'Hazardous','#a03050','Emergency conditions; whole population affected.'],
+];
+function computeAQI(pm25){
+  const c=Math.max(0,pm25);
+  for(const [cl,ch,il,ih,cat,color,desc] of AQI_BP){
+    if(c<=ch){
+      const aqi=Math.round((ih-il)/(ch-cl)*(c-cl)+il);
+      return {aqi,cat,color,desc};
+    }
+  }
+  const last=AQI_BP[AQI_BP.length-1];
+  return {aqi:500,cat:last[4],color:last[5],desc:last[6]};
+}
+
+// ---------- handle one parsed reading ----------
+function handleLine(line){
+  line=line.trim();
+  if(!line.startsWith('AQ,')) return;      // ignore INFO/ERR/partial lines
+  const p=line.split(',');
+  if(p.length<13) return;
+  const n=p.slice(1).map(Number);
+  if(n.some(isNaN)) return;
+  const r={pm1:n[0],pm25:n[1],pm10:n[2],
+           pm1e:n[3],pm25e:n[4],pm10e:n[5],
+           p03:n[6],p05:n[7],p10:n[8],p25:n[9],p50:n[10],p100:n[11],
+           time:new Date()};
+  rows.push(r);
+  document.getElementById('csvBtn').disabled=false;
+
+  // cards
+  document.getElementById('pm1').textContent=r.pm1;
+  document.getElementById('pm25').textContent=r.pm25;
+  document.getElementById('pm10').textContent=r.pm10;
+
+  // AQI
+  const a=computeAQI(r.pm25);
+  const badge=document.getElementById('aqiBadge');
+  badge.style.background=a.color;
+  document.getElementById('aqiNum').textContent=a.aqi;
+  document.getElementById('aqiCat').textContent=a.cat;
+  document.getElementById('aqiDesc').textContent=a.desc;
+
+  // charts
+  const label=r.time.toLocaleTimeString();
+  t.push(label);
+  massChart.data.datasets[0].data.push(r.pm1);
+  massChart.data.datasets[1].data.push(r.pm25);
+  massChart.data.datasets[2].data.push(r.pm10);
+  const cd=countChart.data.datasets;
+  cd[0].data.push(r.p03); cd[1].data.push(r.p05); cd[2].data.push(r.p10);
+  cd[3].data.push(r.p25); cd[4].data.push(r.p50); cd[5].data.push(r.p100);
+  if(t.length>MAX_POINTS){
+    t.shift();
+    massChart.data.datasets.forEach(d=>d.data.shift());
+    cd.forEach(d=>d.data.shift());
+  }
+  massChart.update(); countChart.update();
+}
+
+// ---------- status helpers ----------
+function setConnected(on,text){
+  document.getElementById('dot').classList.toggle('on',on);
+  document.getElementById('statusText').textContent=text;
+  document.getElementById('disBtn').disabled=!on;
+  document.getElementById('usbBtn').disabled=on;
+  document.getElementById('bleBtn').disabled=on;
+}
+
+// ---------- USB (Web Serial) ----------
+async function connectUSB(){
+  if(!('serial' in navigator)){alert('Web Serial not supported. Use Chrome or Edge on desktop.');return;}
+  try{
+    serialPort=await navigator.serial.requestPort();
+    await serialPort.open({baudRate:115200});
+    setConnected(true,'Connected via USB');
+    keepReadingSerial=true;
+    readSerialLoop();
+  }catch(e){ console.error(e); setConnected(false,'USB connection failed'); }
+}
+async function readSerialLoop(){
+  const decoder=new TextDecoderStream();
+  serialPort.readable.pipeTo(decoder.writable).catch(()=>{});
+  serialReader=decoder.readable.getReader();
+  let buf='';
+  try{
+    while(keepReadingSerial){
+      const {value,done}=await serialReader.read();
+      if(done) break;
+      buf+=value;
+      let i;
+      while((i=buf.indexOf('\n'))>=0){
+        handleLine(buf.slice(0,i));
+        buf=buf.slice(i+1);
+      }
+    }
+  }catch(e){ console.error(e); }
+}
+
+// ---------- Bluetooth (Web Bluetooth) ----------
+async function connectBLE(){
+  if(!('bluetooth' in navigator)){alert('Web Bluetooth not supported. Use Chrome/Edge desktop or Android Chrome.');return;}
+  try{
+    bleDevice=await navigator.bluetooth.requestDevice({
+      filters:[{namePrefix:'XIAO'}],
+      optionalServices:[UART_SERVICE]
+    });
+    bleDevice.addEventListener('gattserverdisconnected',onBleDisconnect);
+    const server=await bleDevice.gatt.connect();
+    const svc=await server.getPrimaryService(UART_SERVICE);
+    bleChar=await svc.getCharacteristic(UART_TX_CHAR);
+    let buf='';
+    const dec=new TextDecoder();
+    bleChar.addEventListener('characteristicvaluechanged',ev=>{
+      buf+=dec.decode(ev.target.value);
+      let i;
+      while((i=buf.indexOf('\n'))>=0){
+        handleLine(buf.slice(0,i));
+        buf=buf.slice(i+1);
+      }
+    });
+    await bleChar.startNotifications();
+    setConnected(true,'Connected via Bluetooth');
+  }catch(e){ console.error(e); setConnected(false,'Bluetooth connection failed'); }
+}
+function onBleDisconnect(){ setConnected(false,'Bluetooth disconnected'); bleChar=null; }
+
+// ---------- disconnect ----------
+async function disconnect(){
+  keepReadingSerial=false;
+  try{ if(serialReader){ await serialReader.cancel(); serialReader=null; } }catch(e){}
+  try{ if(serialPort){ await serialPort.close(); serialPort=null; } }catch(e){}
+  try{ if(bleDevice&&bleDevice.gatt.connected){ bleDevice.gatt.disconnect(); } }catch(e){}
+  setConnected(false,'Not connected');
+}
+
+// ---------- CSV export ----------
+function exportCSV(){
+  const head='time,pm1_std,pm25_std,pm10_std,pm1_env,pm25_env,pm10_env,'+
+             'p03,p05,p10,p25,p50,p100,aqi_pm25\n';
+  const body=rows.map(r=>{
+    const a=computeAQI(r.pm25);
+    return [r.time.toISOString(),r.pm1,r.pm25,r.pm10,r.pm1e,r.pm25e,r.pm10e,
+            r.p03,r.p05,r.p10,r.p25,r.p50,r.p100,a.aqi].join(',');
+  }).join('\n');
+  const blob=new Blob([head+body],{type:'text/csv'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download='air_quality_'+Date.now()+'.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ---------- wire up ----------
+document.getElementById('usbBtn').onclick=connectUSB;
+document.getElementById('bleBtn').onclick=connectBLE;
+document.getElementById('disBtn').onclick=disconnect;
+document.getElementById('csvBtn').onclick=exportCSV;
+</script>
+</body>
+</html>
