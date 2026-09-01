@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sweat Sensor Dashboard</title>
+<style>
+  :root{
+    --bg:#0e1116; --panel:#161b22; --panel2:#1c232c; --line:#2a323d;
+    --text:#e6edf3; --dim:#8b98a5; --accent:#4cc9f0; --accent2:#f7b267;
+    --good:#3fb950; --bad:#f85149; --radius:10px;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font:14px/1.45 ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  header{
+    display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+    padding:12px 18px; background:var(--panel); border-bottom:1px solid var(--line);
+  }
+  header h1{font-size:15px; margin:0; font-weight:600; letter-spacing:.2px}
+  header .sub{color:var(--dim); font-size:12px}
+  .spacer{flex:1}
+  .pill{
+    display:inline-flex; align-items:center; gap:7px; padding:4px 11px;
+    border-radius:999px; background:var(--panel2); border:1px solid var(--line);
+    font-size:12px; color:var(--dim);
+  }
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--bad)}
+  .dot.on{background:var(--good); box-shadow:0 0 8px var(--good)}
+  button{
+    font:inherit; font-size:13px; color:var(--text); background:var(--panel2);
+    border:1px solid var(--line); border-radius:8px; padding:6px 12px; cursor:pointer;
+  }
+  button:hover:not(:disabled){border-color:var(--accent); color:var(--accent)}
+  button:disabled{opacity:.4; cursor:not-allowed}
+  button.primary{background:var(--accent); border-color:var(--accent); color:#04222c; font-weight:600}
+  button.primary:hover:not(:disabled){filter:brightness(1.1); color:#04222c}
+  button.danger:hover:not(:disabled){border-color:var(--bad); color:var(--bad)}
+  select,input[type=text],input[type=number]{
+    font:inherit; font-size:13px; color:var(--text); background:var(--panel2);
+    border:1px solid var(--line); border-radius:7px; padding:5px 8px; width:100%;
+  }
+  input[type=range]{width:100%; accent-color:var(--accent)}
+
+  main{display:grid; grid-template-columns:minmax(0,1fr) 320px; gap:14px; padding:14px}
+  @media (max-width:960px){ main{grid-template-columns:minmax(0,1fr)} }
+
+  .panel{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius)}
+  .panel h2{
+    margin:0; padding:10px 14px; font-size:11px; letter-spacing:.09em;
+    text-transform:uppercase; color:var(--dim); border-bottom:1px solid var(--line); font-weight:600;
+  }
+  .body{padding:14px}
+
+  #chartWrap{position:relative; height:min(56vh,460px); padding:8px 8px 4px}
+  canvas{width:100%; height:100%; display:block}
+
+  .stats{display:grid; grid-template-columns:repeat(auto-fit,minmax(96px,1fr)); gap:1px;
+         background:var(--line); border-top:1px solid var(--line)}
+  .stat{background:var(--panel); padding:10px 12px}
+  .stat .k{font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--dim)}
+  .stat .v{font-size:17px; font-variant-numeric:tabular-nums; margin-top:2px}
+  .stat .v.big{font-size:22px; color:var(--accent)}
+
+  .row{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+  .row > *{flex:1}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:9px}
+  label.f{display:block; font-size:11px; color:var(--dim); margin-bottom:4px;
+          letter-spacing:.05em; text-transform:uppercase}
+  .field{margin-bottom:11px}
+  .chk{display:flex; align-items:center; gap:7px; font-size:13px; color:var(--dim); cursor:pointer}
+  .chk input{accent-color:var(--accent)}
+  hr{border:0; border-top:1px solid var(--line); margin:13px 0}
+
+  #log{
+    height:150px; overflow:auto; padding:9px 12px; margin:0;
+    font:11.5px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;
+    color:var(--dim); white-space:pre-wrap; word-break:break-word;
+  }
+  #log b{color:var(--accent2); font-weight:400}
+  #log i{color:var(--bad); font-style:normal}
+  .note{font-size:11.5px; color:var(--dim); margin:10px 0 0}
+  .legend{display:flex; gap:14px; padding:0 14px 10px; font-size:11.5px; color:var(--dim)}
+  .legend span{display:inline-flex; align-items:center; gap:6px}
+  .swatch{width:14px; height:3px; border-radius:2px; display:inline-block}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Sweat Sensor</h1>
+  <span class="sub">XIAO ESP32-C6</span>
+  <span class="pill"><span class="dot" id="dotLink"></span><span id="linkTxt">not connected</span></span>
+  <span class="pill" id="ratePill">0.0 Hz</span>
+  <div class="spacer"></div>
+  <button id="btnUsb">Connect USB</button>
+  <button id="btnBle">Connect Bluetooth</button>
+  <button id="btnDisc" disabled class="danger">Disconnect</button>
+</header>
+
+<main>
+  <div>
+    <div class="panel">
+      <h2>Live signal &mdash; millivolts</h2>
+      <div id="chartWrap"><canvas id="chart"></canvas></div>
+      <div class="legend">
+        <span><i class="swatch" style="background:#4cc9f0"></i>filtered</span>
+        <span><i class="swatch" style="background:#5a6673"></i>raw</span>
+        <span><i class="swatch" style="background:#f7b267"></i>marker</span>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="k">Now</div><div class="v big" id="sNow">&mdash;</div></div>
+        <div class="stat"><div class="k">Min</div><div class="v" id="sMin">&mdash;</div></div>
+        <div class="stat"><div class="k">Max</div><div class="v" id="sMax">&mdash;</div></div>
+        <div class="stat"><div class="k">Mean</div><div class="v" id="sMean">&mdash;</div></div>
+        <div class="stat"><div class="k">Pk&ndash;pk</div><div class="v" id="sPP">&mdash;</div></div>
+        <div class="stat"><div class="k">Samples</div><div class="v" id="sN">0</div></div>
+        <div class="stat"><div class="k">Elapsed</div><div class="v" id="sT">0:00</div></div>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:14px">
+      <h2>Device log</h2>
+      <pre id="log"></pre>
+    </div>
+  </div>
+
+  <div>
+    <div class="panel">
+      <h2>Acquisition</h2>
+      <div class="body">
+        <div class="row" style="margin-bottom:11px">
+          <button class="primary" id="btnStart" disabled>Start</button>
+          <button id="btnStop" disabled>Stop</button>
+        </div>
+        <div class="row" style="margin-bottom:11px">
+          <button id="btnZero" disabled>Zero / tare</button>
+          <button id="btnUnzero" disabled>Clear zero</button>
+        </div>
+
+        <div class="grid2">
+          <div class="field">
+            <label class="f" for="selRate">Rate</label>
+            <select id="selRate">
+              <option value="1">1 Hz</option>
+              <option value="2">2 Hz</option>
+              <option value="5">5 Hz</option>
+              <option value="10" selected>10 Hz</option>
+              <option value="20">20 Hz</option>
+              <option value="50">50 Hz</option>
+            </select>
+          </div>
+          <div class="field">
+            <label class="f" for="selOs">Oversample</label>
+            <select id="selOs">
+              <option value="8">8&times;</option>
+              <option value="16">16&times;</option>
+              <option value="32">32&times;</option>
+              <option value="64" selected>64&times;</option>
+              <option value="128">128&times;</option>
+              <option value="256">256&times;</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="f" for="selAtt">Input range (attenuation)</label>
+          <select id="selAtt">
+            <option value="0" selected>0&ndash;950 mV &middot; 0.23 mV/step</option>
+            <option value="1">0&ndash;1250 mV &middot; 0.31 mV/step</option>
+            <option value="2">0&ndash;1750 mV &middot; 0.43 mV/step</option>
+            <option value="3">0&ndash;3100 mV &middot; 0.76 mV/step</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label class="f" for="rngEma">Smoothing &alpha; <span id="emaVal">0.20</span></label>
+          <input type="range" id="rngEma" min="0.01" max="1" step="0.01" value="0.20">
+        </div>
+
+        <label class="chk"><input type="checkbox" id="chkMed" checked> median-of-3 spike filter</label>
+        <p class="note">Settings are sent to the board as you change them. <b>Zero</b> subtracts the current reading so you can watch small deviations at full resolution.</p>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:14px">
+      <h2>Display</h2>
+      <div class="body">
+        <div class="grid2">
+          <div class="field">
+            <label class="f" for="selWin">Time window</label>
+            <select id="selWin">
+              <option value="30">30 s</option>
+              <option value="60" selected>1 min</option>
+              <option value="300">5 min</option>
+              <option value="900">15 min</option>
+              <option value="0">all</option>
+            </select>
+          </div>
+          <div class="field">
+            <label class="f" for="selY">Y axis</label>
+            <select id="selY">
+              <option value="auto" selected>auto</option>
+              <option value="manual">manual</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid2" id="yManual" style="display:none">
+          <div class="field"><label class="f" for="yMin">Y min (mV)</label><input type="number" id="yMin" value="0" step="any"></div>
+          <div class="field"><label class="f" for="yMax">Y max (mV)</label><input type="number" id="yMax" value="100" step="any"></div>
+        </div>
+        <label class="chk"><input type="checkbox" id="chkRaw" checked> show raw trace</label>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:14px">
+      <h2>Recording</h2>
+      <div class="body">
+        <div class="field">
+          <label class="f" for="txtLabel">Sample / run label</label>
+          <input type="text" id="txtLabel" placeholder="e.g. subject-01 lactate">
+        </div>
+        <div class="row" style="margin-bottom:9px">
+          <button id="btnMark" disabled>Add marker</button>
+          <button id="btnClear" class="danger">Clear data</button>
+        </div>
+        <button class="primary" id="btnCsv" style="width:100%" disabled>Export CSV</button>
+        <p class="note" id="recNote">No data recorded yet.</p>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+"use strict";
+
+/* ------------------------------------------------------------------ state */
+const NUS = {
+  service: '6e400001-b5a3-f393-e0a9-e50e24dcca9e',
+  rx:      '6e400002-b5a3-f393-e0a9-e50e24dcca9e',   // host -> board
+  tx:      '6e400003-b5a3-f393-e0a9-e50e24dcca9e'    // board -> host
+};
+const MAX_POINTS = 500000;
+
+let link = null;            // {type, send(str), close()}
+let data = [];              // {t, ms, raw, mv, mvf}
+let markers = [];           // {t, label}
+let ms0 = null;             // device timestamp of first sample
+let startedAt = null;       // wall clock of first sample
+let markCount = 0;
+let dirty = true;
+
+const $ = id => document.getElementById(id);
+
+/* -------------------------------------------------------------------- log */
+function log(msg, kind) {
+  const el = $('log');
+  const tag = kind === 'err' ? 'i' : (kind === 'tx' ? 'b' : null);
+  const stamp = new Date().toLocaleTimeString();
+  const text = stamp + '  ' + msg + '\n';
+  if (tag) {
+    const n = document.createElement(tag);
+    n.textContent = text;
+    el.appendChild(n);
+  } else {
+    el.appendChild(document.createTextNode(text));
+  }
+  while (el.childNodes.length > 400) el.removeChild(el.firstChild);
+  el.scrollTop = el.scrollHeight;
+}
+
+/* ------------------------------------------------------------ line parser */
+let rxBuf = '';
+function feed(chunk) {
+  rxBuf += chunk;
+  let i;
+  while ((i = rxBuf.indexOf('\n')) >= 0) {
+    const line = rxBuf.slice(0, i).replace(/\r$/, '');
+    rxBuf = rxBuf.slice(i + 1);
+    onLine(line);
+  }
+  if (rxBuf.length > 4096) rxBuf = '';        // desync guard
+}
+
+function onLine(line) {
+  line = line.trim();
+  if (!line) return;
+
+  if (line.startsWith('D,')) {
+    const p = line.split(',');
+    if (p.length < 5) return;
+    const ms  = +p[1], raw = +p[2], mv = +p[3], mvf = +p[4];
+    if (!isFinite(ms) || !isFinite(mv) || !isFinite(mvf)) return;
+
+    if (ms0 === null) { ms0 = ms; startedAt = new Date(); }
+    let t = (ms - ms0) / 1000;
+    if (t < 0) { ms0 = ms; t = 0; }           // board rebooted
+
+    data.push({ t, ms, raw, mv, mvf });
+    if (data.length > MAX_POINTS) data.splice(0, data.length - MAX_POINTS);
+    dirty = true;
+  } else {
+    log(line.replace(/^#\s*/, ''));
+  }
+}
+
+/* ------------------------------------------------------------ USB / serial */
+let serialPort = null, serialReader = null, serialClosed = null;
+
+async function connectUsb() {
+  if (!('serial' in navigator)) {
+    log('Web Serial is not available. Use Chrome or Edge over http(s)://localhost or file://', 'err');
+    return;
+  }
+  try {
+    serialPort = await navigator.serial.requestPort();
+    await serialPort.open({ baudRate: 115200 });
+  } catch (e) {
+    log('USB: ' + e.message, 'err');
+    return;
+  }
+
+  const dec = new TextDecoderStream();
+  serialClosed = serialPort.readable.pipeTo(dec.writable).catch(() => {});
+  serialReader = dec.readable.getReader();
+
+  link = {
+    type: 'USB',
+    async send(s) {
+      const w = serialPort.writable.getWriter();
+      try { await w.write(new TextEncoder().encode(s + '\n')); }
+      finally { w.releaseLock(); }
+    },
+    async close() {
+      try { await serialReader.cancel(); } catch (e) {}
+      try { await serialClosed; } catch (e) {}
+      try { await serialPort.close(); } catch (e) {}
+      serialPort = serialReader = null;
+    }
+  };
+  setLink(true, 'USB serial');
+
+  (async () => {
+    try {
+      while (true) {
+        const { value, done } = await serialReader.read();
+        if (done) break;
+        if (value) feed(value);
+      }
+    } catch (e) { /* closed */ }
+    if (link && link.type === 'USB') onDropped();
+  })();
+
+  await pushAllSettings();
+}
+
+/* ------------------------------------------------------------------- BLE */
+let bleDevice = null, bleRxChar = null;
+
+async function connectBle() {
+  if (!('bluetooth' in navigator)) {
+    log('Web Bluetooth is not available. Use Chrome or Edge on desktop/Android.', 'err');
+    return;
+  }
+  try {
+    bleDevice = await navigator.bluetooth.requestDevice({
+      filters: [{ namePrefix: 'SweatSensor' }],
+      optionalServices: [NUS.service]
+    });
+    const server = await bleDevice.gatt.connect();
+    const svc    = await server.getPrimaryService(NUS.service);
+    bleRxChar    = await svc.getCharacteristic(NUS.rx);
+    const txChar = await svc.getCharacteristic(NUS.tx);
+
+    const dec = new TextDecoder();
+    txChar.addEventListener('characteristicvaluechanged', ev => feed(dec.decode(ev.target.value)));
+    await txChar.startNotifications();
+
+    bleDevice.addEventListener('gattserverdisconnected', () => {
+      if (link && link.type === 'BLE') onDropped();
+    });
+  } catch (e) {
+    log('BLE: ' + e.message, 'err');
+    return;
+  }
+
+  link = {
+    type: 'BLE',
+    async send(s) {
+      const bytes = new TextEncoder().encode(s + '\n');
+      for (let i = 0; i < bytes.length; i += 20) {
+        const part = bytes.slice(i, i + 20);
+        if (bleRxChar.writeValueWithoutResponse) await bleRxChar.writeValueWithoutResponse(part);
+        else await bleRxChar.writeValue(part);
+      }
+    },
+    async close() {
+      try { if (bleDevice && bleDevice.gatt.connected) bleDevice.gatt.disconnect(); } catch (e) {}
+      bleDevice = bleRxChar = null;
+    }
+  };
+  setLink(true, 'Bluetooth · ' + bleDevice.name);
+  await pushAllSettings();
+}
+
+/* ------------------------------------------------------- link bookkeeping */
+function setLink(on, text) {
+  $('dotLink').classList.toggle('on', on);
+  $('linkTxt').textContent = on ? text : 'not connected';
+  for (const id of ['btnStart','btnStop','btnZero','btnUnzero','btnMark'])
+    $(id).disabled = !on;
+  $('btnDisc').disabled = !on;
+  $('btnUsb').disabled  = on;
+  $('btnBle').disabled  = on;
+  if (on) log('connected over ' + text);
+}
+
+function onDropped() {
+  link = null;
+  setLink(false);
+  log('link closed', 'err');
+}
+
+async function disconnect() {
+  if (!link) return;
+  try { await send('STOP'); } catch (e) {}
+  const l = link; link = null;
+  await l.close();
+  setLink(false);
+}
+
+async function send(cmd) {
+  if (!link) return;
+  log('> ' + cmd, 'tx');
+  try { await link.send(cmd); }
+  catch (e) { log('send failed: ' + e.message, 'err'); }
+}
+
+async function pushAllSettings() {
+  await send('RATE ' + $('selRate').value);
+  await send('OS '   + $('selOs').value);
+  await send('ATT '  + $('selAtt').value);
+  await send('EMA '  + $('rngEma').value);
+  await send('MED '  + ($('chkMed').checked ? 1 : 0));
+  await send('INFO');
+}
+
+/* ---------------------------------------------------------------- charting */
+const cv = $('chart'), ctx = cv.getContext('2d');
+let W = 0, H = 0;
+
+function resizeCanvas() {
+  const r = cv.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  cv.width  = Math.max(1, Math.round(r.width  * dpr));
+  cv.height = Math.max(1, Math.round(r.height * dpr));
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  W = r.width; H = r.height;
+  dirty = true;
+}
+window.addEventListener('resize', resizeCanvas);
+
+function niceTicks(lo, hi, want) {
+  const span = hi - lo;
+  if (!(span > 0)) return [lo];
+  const rough = span / want;
+  const mag   = Math.pow(10, Math.floor(Math.log10(rough)));
+  const norm  = rough / mag;
+  const step  = (norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 5 ? 5 : 10) * mag;
+  const out = [];
+  for (let v = Math.ceil(lo / step) * step; v <= hi + step * 1e-6; v += step) out.push(v);
+  return out;
+}
+
+function fmt(v, span) {
+  const d = span < 1 ? 3 : span < 10 ? 2 : span < 100 ? 1 : 0;
+  return v.toFixed(d);
+}
+
+function firstIndexAfter(tMin) {
+  let lo = 0, hi = data.length;
+  while (lo < hi) { const m = (lo + hi) >> 1; if (data[m].t < tMin) lo = m + 1; else hi = m; }
+  return lo;
+}
+
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+  const padL = 62, padR = 14, padT = 12, padB = 30;
+  const pw = W - padL - padR, ph = H - padT - padB;
+  if (pw <= 10 || ph <= 10) return;
+
+  // --- x window ---------------------------------------------------------
+  const win  = +$('selWin').value;
+  const tEnd = data.length ? data[data.length - 1].t : 0;
+  let tStart = (win > 0) ? tEnd - win : (data.length ? data[0].t : 0);
+  if (tEnd - tStart < 1e-6) tStart = tEnd - (win > 0 ? win : 10);
+  const i0 = firstIndexAfter(tStart);
+  const i1 = data.length;
+
+  // --- y window ---------------------------------------------------------
+  const showRaw = $('chkRaw').checked;
+  let yLo, yHi;
+  if ($('selY').value === 'manual') {
+    yLo = parseFloat($('yMin').value); yHi = parseFloat($('yMax').value);
+    if (!(yHi > yLo)) { yLo = 0; yHi = 100; }
+  } else {
+    yLo = Infinity; yHi = -Infinity;
+    for (let i = i0; i < i1; i++) {
+      const p = data[i];
+      if (p.mvf < yLo) yLo = p.mvf;
+      if (p.mvf > yHi) yHi = p.mvf;
+      if (showRaw) { if (p.mv < yLo) yLo = p.mv; if (p.mv > yHi) yHi = p.mv; }
+    }
+    if (!isFinite(yLo)) { yLo = 0; yHi = 1; }
+    const pad = (yHi - yLo) * 0.12 || Math.max(Math.abs(yHi) * 0.02, 0.05);
+    yLo -= pad; yHi += pad;
+  }
+
+  const X = t => padL + (t - tStart) / (tEnd - tStart) * pw;
+  const Y = v => padT + (1 - (v - yLo) / (yHi - yLo)) * ph;
+
+  // --- grid -------------------------------------------------------------
+  ctx.font = '11px ui-monospace,Menlo,monospace';
+  ctx.strokeStyle = '#232b35'; ctx.lineWidth = 1;
+  ctx.fillStyle = '#8b98a5';
+
+  const ySpan = yHi - yLo;
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  for (const v of niceTicks(yLo, yHi, 6)) {
+    const y = Math.round(Y(v)) + 0.5;
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + pw, y); ctx.stroke();
+    ctx.fillText(fmt(v, ySpan), padL - 8, y);
+  }
+
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  const xSpan = tEnd - tStart;
+  for (const v of niceTicks(tStart, tEnd, 6)) {
+    const x = Math.round(X(v)) + 0.5;
+    ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, padT + ph); ctx.stroke();
+    const lab = xSpan > 120 ? (v / 60).toFixed(1) + 'm' : v.toFixed(xSpan < 10 ? 1 : 0) + 's';
+    ctx.fillText(lab, x, padT + ph + 7);
+  }
+
+  ctx.strokeStyle = '#2a323d';
+  ctx.strokeRect(padL + 0.5, padT + 0.5, pw, ph);
+
+  // --- markers ----------------------------------------------------------
+  ctx.strokeStyle = 'rgba(247,178,103,.65)';
+  ctx.setLineDash([4, 4]);
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillStyle = '#f7b267';
+  for (const m of markers) {
+    if (m.t < tStart || m.t > tEnd) continue;
+    const x = Math.round(X(m.t)) + 0.5;
+    ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, padT + ph); ctx.stroke();
+    ctx.fillText(m.label, x + 4, padT + 3);
+  }
+  ctx.setLineDash([]);
+
+  // --- traces -----------------------------------------------------------
+  ctx.save();
+  ctx.beginPath(); ctx.rect(padL, padT, pw, ph); ctx.clip();
+  if (showRaw) stroke(i0, i1, 'mv',  '#5a6673', 1);
+  stroke(i0, i1, 'mvf', '#4cc9f0', 1.7);
+  ctx.restore();
+
+  function stroke(a, b, key, color, width) {
+    const n = b - a;
+    if (n < 1) return;
+    ctx.strokeStyle = color; ctx.lineWidth = width;
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ctx.beginPath();
+    if (n <= pw * 2) {
+      for (let i = a; i < b; i++) {
+        const p = data[i], x = X(p.t), y = Y(p[key]);
+        if (i === a) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+    } else {
+      // more samples than pixels: draw the min/max envelope per column
+      let col = -1, mn = 0, mx = 0, first = true;
+      const flush = () => {
+        const x = col + 0.5;
+        if (first) { ctx.moveTo(x, Y(mx)); first = false; } else ctx.lineTo(x, Y(mx));
+        ctx.lineTo(x, Y(mn));
+      };
+      for (let i = a; i < b; i++) {
+        const p = data[i], v = p[key], c = Math.floor(X(p.t));
+        if (c !== col) { if (col >= 0) flush(); col = c; mn = v; mx = v; }
+        else { if (v < mn) mn = v; if (v > mx) mx = v; }
+      }
+      if (col >= 0) flush();
+    }
+    ctx.stroke();
+  }
+
+  // --- readouts ---------------------------------------------------------
+  let mn = Infinity, mx = -Infinity, sum = 0, cnt = 0;
+  for (let i = i0; i < i1; i++) {
+    const v = data[i].mvf;
+    if (v < mn) mn = v; if (v > mx) mx = v;
+    sum += v; cnt++;
+  }
+  const last = data.length ? data[data.length - 1].mvf : null;
+  $('sNow').textContent  = last === null ? '—' : last.toFixed(3);
+  $('sMin').textContent  = cnt ? mn.toFixed(3) : '—';
+  $('sMax').textContent  = cnt ? mx.toFixed(3) : '—';
+  $('sMean').textContent = cnt ? (sum / cnt).toFixed(3) : '—';
+  $('sPP').textContent   = cnt ? (mx - mn).toFixed(3) : '—';
+  $('sN').textContent    = data.length.toLocaleString();
+  const el = data.length ? data[data.length - 1].t : 0;
+  $('sT').textContent = Math.floor(el / 60) + ':' + String(Math.floor(el % 60)).padStart(2, '0');
+
+  // measured output rate over the last 20 samples
+  if (data.length > 3) {
+    const k = Math.max(0, data.length - 20);
+    const dt = data[data.length - 1].t - data[k].t;
+    const hz = dt > 0 ? (data.length - 1 - k) / dt : 0;
+    $('ratePill').textContent = hz.toFixed(1) + ' Hz';
+  }
+
+  $('btnCsv').disabled = data.length === 0;
+  $('recNote').textContent = data.length
+    ? data.length.toLocaleString() + ' samples · ' + markers.length + ' marker(s) recorded'
+    : 'No data recorded yet.';
+}
+
+(function tick() {
+  if (dirty) { dirty = false; draw(); }
+  requestAnimationFrame(tick);
+})();
+
+/* -------------------------------------------------------------- CSV export */
+function exportCsv() {
+  if (!data.length) return;
+  const label = ($('txtLabel').value || 'sweat').trim();
+
+  // attach each marker to the nearest sample
+  const markAt = new Map();
+  for (const m of markers) {
+    let lo = 0, hi = data.length - 1;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (data[mid].t < m.t) lo = mid + 1; else hi = mid; }
+    markAt.set(lo, (markAt.get(lo) ? markAt.get(lo) + ' | ' : '') + m.label);
+  }
+
+  const attTxt = $('selAtt').selectedOptions[0].textContent.replace(/\s+/g, ' ');
+  const head = [
+    '# Sweat sensor log - XIAO ESP32-C6',
+    '# label,' + label,
+    '# exported,' + new Date().toISOString(),
+    '# started,' + (startedAt ? startedAt.toISOString() : ''),
+    '# link,' + (link ? link.type : 'offline'),
+    '# rate_hz,' + $('selRate').value,
+    '# oversample,' + $('selOs').value,
+    '# attenuation,' + attTxt,
+    '# ema_alpha,' + $('rngEma').value,
+    '# median3,' + ($('chkMed').checked ? 1 : 0),
+    '# samples,' + data.length,
+    'elapsed_s,device_ms,raw_counts,mV,mV_filtered,marker'
+  ];
+
+  const rows = new Array(data.length);
+  for (let i = 0; i < data.length; i++) {
+    const p = data[i];
+    const m = markAt.get(i);
+    rows[i] = p.t.toFixed(3) + ',' + p.ms + ',' + p.raw.toFixed(2) + ',' +
+              p.mv.toFixed(3) + ',' + p.mvf.toFixed(3) + ',' +
+              (m ? '"' + m.replace(/"/g, '""') + '"' : '');
+  }
+
+  // leading BOM so Excel opens the file as UTF-8
+  const blob = new Blob(['\ufeff' + head.join('\n') + '\n' + rows.join('\n') + '\n'],
+                        { type: 'text/csv;charset=utf-8' });
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = label.replace(/[^\w.-]+/g, '_') + '_' + stamp + '.csv';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  log('exported ' + data.length + ' rows');
+}
+
+/* ------------------------------------------------------------------ wiring */
+$('btnUsb').onclick  = connectUsb;
+$('btnBle').onclick  = connectBle;
+$('btnDisc').onclick = disconnect;
+
+$('btnStart').onclick = () => send('START');
+$('btnStop').onclick  = () => send('STOP');
+$('btnZero').onclick  = () => send('ZERO');
+$('btnUnzero').onclick = () => send('ZERO 0');
+
+$('selRate').onchange = e => send('RATE ' + e.target.value);
+$('selOs').onchange   = e => send('OS '   + e.target.value);
+$('selAtt').onchange  = e => send('ATT '  + e.target.value);
+$('chkMed').onchange  = e => send('MED '  + (e.target.checked ? 1 : 0));
+$('rngEma').oninput   = e => { $('emaVal').textContent = (+e.target.value).toFixed(2); };
+$('rngEma').onchange  = e => send('EMA ' + e.target.value);
+
+$('selWin').onchange = () => dirty = true;
+$('chkRaw').onchange = () => dirty = true;
+$('yMin').oninput = $('yMax').oninput = () => dirty = true;
+$('selY').onchange = e => {
+  $('yManual').style.display = e.target.value === 'manual' ? 'grid' : 'none';
+  dirty = true;
+};
+
+$('btnMark').onclick = () => {
+  if (!data.length) return;
+  const base = ($('txtLabel').value || '').trim();
+  markCount++;
+  markers.push({ t: data[data.length - 1].t, label: base ? base + ' ' + markCount : 'M' + markCount });
+  log('marker at ' + data[data.length - 1].t.toFixed(2) + ' s');
+  dirty = true;
+};
+
+$('btnClear').onclick = () => {
+  if (data.length && !confirm('Discard ' + data.length + ' recorded samples?')) return;
+  data = []; markers = []; ms0 = null; startedAt = null; markCount = 0;
+  dirty = true;
+  log('data cleared');
+};
+
+$('btnCsv').onclick = exportCsv;
+
+window.addEventListener('beforeunload', e => {
+  if (data.length) { e.preventDefault(); e.returnValue = ''; }
+});
+
+resizeCanvas();
+log('ready — connect over USB (Web Serial) or Bluetooth (Web Bluetooth)');
+if (!('serial' in navigator))    log('note: this browser has no Web Serial', 'err');
+if (!('bluetooth' in navigator)) log('note: this browser has no Web Bluetooth', 'err');
+</script>
+</body>
+</html>
