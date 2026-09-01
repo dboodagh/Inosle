@@ -92,7 +92,7 @@
 
 <header>
   <h1>Sweat Sensor</h1>
-  <span class="sub">XIAO ESP32-C6</span>
+  <span class="sub">XIAO ESP32-S3</span>
   <span class="pill"><span class="dot" id="dotLink"></span><span id="linkTxt">not connected</span></span>
   <span class="pill" id="ratePill">0.0 Hz</span>
   <div class="spacer"></div>
@@ -159,8 +159,8 @@
               <option value="8">8&times;</option>
               <option value="16">16&times;</option>
               <option value="32">32&times;</option>
-              <option value="64" selected>64&times;</option>
-              <option value="128">128&times;</option>
+              <option value="64">64&times;</option>
+              <option value="128" selected>128&times;</option>
               <option value="256">256&times;</option>
             </select>
           </div>
@@ -647,7 +647,7 @@ function exportCsv() {
 
   const attTxt = $('selAtt').selectedOptions[0].textContent.replace(/\s+/g, ' ');
   const head = [
-    '# Sweat sensor log - XIAO ESP32-C6',
+    '# Sweat sensor log - XIAO ESP32-S3',
     '# label,' + label,
     '# exported,' + new Date().toISOString(),
     '# started,' + (startedAt ? startedAt.toISOString() : ''),
