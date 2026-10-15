@@ -390,7 +390,7 @@
                   stroke-width="2"
                 />
               </g>
-            </svg></div></div><div class="legend"><span id="legend-min">0 ADC</span><div class="gradient"></div><span id="legend-max">4095 ADC</span></div><p id="cop-status" class="muted small">Raw mode shows an ADC-weighted signal-centre pointer. Force mode shows CoP only with valid calibration on all 16 channels. Coordinates use SVG units, not millimetres.</p><details><summary>Preserved layout: channel-label note</summary><p class="small muted">Channel IDs follow your confirmed press test: visible sensor 8 uses channel 9, visible sensor 10 uses channel 11, and visible sensor 11 uses channel 8. Visible sensor 9 still uses channel 10. Labels and positions are unchanged. Geometry, paths, clipping and blur are preserved exactly. Calibration and data use electrical channel IDs S0–S15, not necessarily the visible labels. Use S9 to calibrate visible sensor 8, S11 for visible sensor 10, and S8 for visible sensor 11. Verify physical wiring before interpreting locations. CoP is an estimate from the sampled sensors, not a full-foot pressure measurement.</p></details></section>
+            </svg></div></div><div class="legend"><span id="legend-min">0 ADC</span><div class="gradient"></div><span id="legend-max">4095 ADC</span></div><div class="button-row"><label>Pointer noise floor (ADC counts)<input id="pointer-noise" type="number" min="0" max="4095" value="20"></label><label>Pointer smoothing (ms)<input id="pointer-smoothing" type="number" min="0" max="1000" value="150"></label></div><p class="small muted">Pointer ignores unloaded offsets from your 0 N captures and small signals. Smoothing affects the displayed pointer only. When calibrated CoP is unavailable, the pointer shows a labelled signal-centre fallback.</p><p id="cop-status" class="muted small">Raw mode shows an ADC-weighted signal-centre pointer. Force mode shows CoP only with valid calibration on all 16 channels. Coordinates use SVG units, not millimetres.</p><details><summary>Preserved layout: channel-label note</summary><p class="small muted">Channel IDs follow your confirmed press test: visible sensor 8 uses channel 9, visible sensor 10 uses channel 11, and visible sensor 11 uses channel 8. Visible sensor 9 still uses channel 10. Labels and positions are unchanged. Geometry, paths, clipping and blur are preserved exactly. Calibration and data use electrical channel IDs S0–S15, not necessarily the visible labels. Use S9 to calibrate visible sensor 8, S11 for visible sensor 10, and S8 for visible sensor 11. Verify physical wiring before interpreting locations. CoP is an estimate from the sampled sensors, not a full-foot pressure measurement.</p></details></section>
 <section class="card"><div class="visual-toolbar"><div><div class="section-label">CHANNEL READOUT</div><h2>Signals &amp; force estimates</h2></div><span class="pill">12-bit · 0–4095</span></div><div id="readings" class="readings"></div><p class="muted small">“Uncalibrated” and “Outside range” are not zero force. Colours represent sampled signal or force, not pressure per unit area.</p></section>
 <section class="card guide"><h2>A practical calibration workflow</h2><ol><li>Place the assembled sensor on a rigid support on the scale. Tare the support and insole before adding the loading disc. Ensure all applied force passes through the selected sensor.</li><li>Capture the unloaded point. Apply several stable, known loads through the same disc and capture each one. The app averages one second of fresh readings.</li><li>Repeat loads to check variability. Calibrate every channel separately, including the different sensor sizes. Do not reuse the old layer’s resistance-to-force values.</li><li>A 5 kg scale tests only about 49 N. Higher walking loads remain outside range until measured with a suitable reference. Static calibration does not establish treadmill accuracy.</li></ol></section>
 </div></div>
@@ -457,6 +457,7 @@ const PROTOCOL='nova-raw12-v1-vdd4-10kohm';
 let calibration={schema:PROTOCOL,id:crypto.randomUUID(),channels:Array.from({length:16},()=>[])};
 let mode=null,busy=false,port=null,reader=null,readTask=null,device=null,characteristic=null,demoTimer=null;
 let latest=null,lastArrival=0,history=[],rateWindow=[],missing=0,recording=false,session=null,capture=null;
+let pointerState=null;
 const decoder=new InsoleDecoder(onFrame);
 const coords=Array.from({length:16},(_,i)=>({x:Number($(`heat-${i}`).getAttribute('cx')),y:Number($(`heat-${i}`).getAttribute('cy'))}));
 function validateCalibration(c){
@@ -497,7 +498,7 @@ function controls(){
   $('session-json').disabled=recording||!session?.rows.length;
   $('connection-pill').textContent=mode==='demo'?'DEMO · synthetic':mode?`${mode} · ${fresh()?'Streaming':'Waiting for data'}`:'Offline';
 }
-function clearLive(){latest=null;history=[];rateWindow=[];lastArrival=0;decoder.reset();$('rate').innerHTML='— <em>Hz</em>';$('cal-live').textContent='—';$('total').innerHTML='— <em>N</em>';for(let i=0;i<16;i++){$(`zone-${i}`).style.fill='#d1d5db';$(`heat-${i}`).style.opacity=0;}$('cop-marker').style.opacity=0;$('cop-status').textContent='CoP unavailable: no fresh acquisition data.';renderReadings();}
+function clearLive(){pointerState=null;latest=null;history=[];rateWindow=[];lastArrival=0;decoder.reset();$('rate').innerHTML='— <em>Hz</em>';$('cal-live').textContent='—';$('total').innerHTML='— <em>N</em>';for(let i=0;i<16;i++){$(`zone-${i}`).style.fill='#d1d5db';$(`heat-${i}`).style.opacity=0;}$('cop-marker').style.opacity=0;$('cop-status').textContent='CoP unavailable: no fresh acquisition data.';renderReadings();}
 function beginConnection(kind){clearLive();missing=0;$('gaps').textContent='0';mode=kind;status(kind==='demo'?'Demo uses synthetic ADC signals. It cannot calibrate your sensors.':`Connected via ${kind}. Waiting for Raw12 packets…`);controls();}
 function finishConnection(message){if(recording)stopRecording();if(capture){capture=null;$('cal-message').textContent='Capture cancelled because the connection ended.';}mode=null;clearLive();controls();status(message);}
 async function disconnect(){
@@ -546,22 +547,31 @@ function renderReadings(){
   for(let i=0;i<16;i++){const value=forceMode?forces[i].n:latest.adc[i];const fraction=value===null||!(limit>0)&&forceMode?null:Math.min(1,Math.max(0,value/(forceMode?limit:4095)));const color=fraction===null||fraction<.015?'#d1d5db':`hsl(${120-120*fraction},100%,50%)`;$(`zone-${i}`).style.fill=color;$(`heat-${i}`).style.fill=color;$(`heat-${i}`).style.opacity=fraction===null?0:Math.min(fraction*1.7,1);}
   const allValid=forces.every(f=>f.status==='valid');const sum=allValid?forces.reduce((s,f)=>s+f.n,0):null;
   $('total').innerHTML=(sum===null?'—':sum.toFixed(1))+' <em>N</em>';
-  // Raw ADC has no force calibration: its weighted centre is only a signal proxy.
-  const weights=forceMode ? (allValid?forces.map(f=>f.n):null) : latest.adc;
-  const weightSum=weights?.reduce((a,b)=>a+b,0)??0;
-  const marker=$('cop-marker');
+  const noise=Math.max(0,Math.min(4095,Number($('pointer-noise').value)||0));
+  const signalWeights=latest.adc.map((raw,i)=>{
+    const zero=mode==='demo'?{adc:32,sd:0}:calibration.channels[i][0];
+    const net=Math.max(0,raw-(zero?.adc??0));
+    return net>Math.max(noise,3*(Number.isFinite(zero?.sd)&&zero.sd>=0?zero.sd:0))?net:0;
+  });
+  const calibratedPointer=forceMode&&allValid;
+  const weights=calibratedPointer?forces.map((f,i)=>signalWeights[i]>0?f.n:0):signalWeights;
+  const weightSum=weights.reduce((a,b)=>a+b,0);
+  const marker=$('cop-marker'),kind=calibratedPointer?'force':'signal';
   if(weightSum>0){
-    const x=weights.reduce((s,w,i)=>s+w*coords[i].x,0)/weightSum;
-    const y=weights.reduce((s,w,i)=>s+w*coords[i].y,0)/weightSum;
-    marker.setAttribute('transform',`translate(${x},${y})`);
-    marker.style.opacity=1;
-    marker.setAttribute('aria-label',forceMode?'Estimated centre of pressure':'Raw signal centre, not calibrated CoP');
-    $('cop-status').textContent=forceMode
-      ? `Estimated CoP · X ${x.toFixed(1)}, Y ${y.toFixed(1)} SVG units · weighted by calibrated sensor forces.`
-      : `${mode==='demo'?'Demo · ':''}Raw signal centre · X ${x.toFixed(1)}, Y ${y.toFixed(1)} SVG units · ADC-weighted pointer, not calibrated CoP. Unloaded offsets can move this pointer.`;
+    const targetX=weights.reduce((s,w,i)=>s+w*coords[i].x,0)/weightSum;
+    const targetY=weights.reduce((s,w,i)=>s+w*coords[i].y,0)/weightSum;
+    const tau=Math.max(0,Math.min(1000,Number($('pointer-smoothing').value)||0));
+    if(!pointerState||pointerState.kind!==kind||latest.timeMs<pointerState.t)pointerState={x:targetX,y:targetY,t:latest.timeMs,kind};
+    else if(latest.timeMs!==pointerState.t){const alpha=tau===0?1:1-Math.exp(-(latest.timeMs-pointerState.t)/tau);pointerState.x+=alpha*(targetX-pointerState.x);pointerState.y+=alpha*(targetY-pointerState.y);pointerState.t=latest.timeMs;}
+    const {x,y}=pointerState;
+    marker.setAttribute('transform',`translate(${x},${y})`);marker.style.opacity=1;
+    marker.setAttribute('aria-label',calibratedPointer?'Filtered estimated centre of pressure':'Signal centre, not calibrated CoP');
+    $('cop-status').textContent=calibratedPointer
+      ? `Filtered estimated CoP · X ${x.toFixed(1)}, Y ${y.toFixed(1)} SVG units · noise-gated calibrated forces; display smoothing only.`
+      : `${mode==='demo'?'Demo · ':forceMode?'CoP unavailable — signal fallback · ':''}Raw signal centre · X ${x.toFixed(1)}, Y ${y.toFixed(1)} SVG units · baseline-subtracted, not calibrated CoP.${mode!=='demo'&&calibration.channels.some(p=>!p.length)?' Capture 0 N on every channel to remove all unloaded offsets.':''}`;
   }else{
-    marker.style.opacity=0;
-    $('cop-status').textContent=forceMode?'CoP unavailable: all 16 channels must be calibrated and in range, with a positive total force.':'Signal centre unavailable: all raw readings are zero.';
+    pointerState=null;marker.style.opacity=0;
+    $('cop-status').textContent='No signal above the pointer noise floor. Pointer hidden to avoid unloaded jitter.';
   }
 }
 function startRecording(){
@@ -595,9 +605,10 @@ $('capture').onclick=()=>{
 $('export-cal').onclick=()=>download('nova-calibration.json',JSON.stringify(calibration,null,2),'application/json');
 $('import-cal').onclick=()=>$('cal-file').click();
 $('cal-file').onchange=async()=>{const file=$('cal-file').files[0];if(!file)return;try{if(recording||capture)throw Error('Stop recording/capture first.');if(file.size>1000000)throw Error('File is too large.');const next=validateCalibration(JSON.parse(await file.text()));if(!confirm('Replace all 16 channel calibrations with this file?'))return;calibration=next;try{localStorage.setItem(STORAGE,JSON.stringify(calibration));}catch{}renderCalibration();$('cal-message').textContent='Calibration imported. Confirm it belongs to this layer, board and loading setup.';}catch(e){$('cal-message').textContent='Import failed: '+e.message;}finally{$('cal-file').value='';}};
-$('display-mode').onchange=renderReadings;$('force-scale').oninput=renderReadings;
+$('display-mode').onchange=()=>{pointerState=null;renderReadings();};$('force-scale').oninput=renderReadings;
+for(const id of ['pointer-noise','pointer-smoothing'])$(id).oninput=()=>{pointerState=null;renderReadings();};
 $('support').textContent=[!navigator.serial?'Web Serial unavailable.':'',!navigator.bluetooth?'Web Bluetooth unavailable.':'','For hardware, use a supported desktop browser on localhost or HTTPS.'].filter(Boolean).join(' ');
 window.addEventListener('beforeunload',e=>{if(recording||session?.rows.length){e.preventDefault();e.returnValue='';}});
-setInterval(()=>{controls();if(fresh())renderReadings();else if(latest){$('rate').innerHTML='— <em>Hz</em>';$('cal-live').textContent='—';$('total').innerHTML='— <em>N</em>';$('cop-marker').style.opacity=0;for(let i=0;i<16;i++){$(`zone-${i}`).style.fill='#d1d5db';$(`heat-${i}`).style.opacity=0;}renderReadings();$('cop-status').textContent='CoP unavailable: the stream is stale.';status('No fresh Raw12 data. Check the firmware and connection.');}if(session)$('record-status').textContent=`${recording?'● Recording · ':''}${session.rows.length.toLocaleString()} samples · ${((session.rows.at(-1)?.timeMs??0)/1000).toFixed(1)} s${session.source==='demo'?' · DEMO':''}`;},150);
+setInterval(()=>{controls();if(fresh())renderReadings();else if(latest){pointerState=null;$('rate').innerHTML='— <em>Hz</em>';$('cal-live').textContent='—';$('total').innerHTML='— <em>N</em>';$('cop-marker').style.opacity=0;for(let i=0;i<16;i++){$(`zone-${i}`).style.fill='#d1d5db';$(`heat-${i}`).style.opacity=0;}renderReadings();$('cop-status').textContent='CoP unavailable: the stream is stale.';status('No fresh Raw12 data. Check the firmware and connection.');}if(session)$('record-status').textContent=`${recording?'● Recording · ':''}${session.rows.length.toLocaleString()} samples · ${((session.rows.at(-1)?.timeMs??0)/1000).toFixed(1)} s${session.source==='demo'?' · DEMO':''}`;},150);
 renderCalibration();renderReadings();controls();
 </script></body></html>
