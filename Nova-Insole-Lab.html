@@ -133,7 +133,7 @@
                 />
                 <text x="70" y="410" class="insole-zone-text">9</text>
                 <circle
-                  id="zone-11"
+                  id="zone-9"
                   class="insole-zone"
                   cx="90"
                   cy="490"
@@ -142,7 +142,7 @@
                 />
                 <text x="90" y="490" class="insole-zone-text">10</text>
                 <circle
-                  id="zone-9"
+                  id="zone-11"
                   class="insole-zone"
                   cx="190"
                   cy="380"
@@ -315,7 +315,7 @@
                   fill="transparent"
                 />
                 <circle
-                  id="heat-11"
+                  id="heat-9"
                   class="heatmap-blob"
                   cx="90"
                   cy="490"
@@ -323,7 +323,7 @@
                   fill="transparent"
                 />
                 <circle
-                  id="heat-9"
+                  id="heat-11"
                   class="heatmap-blob"
                   cx="190"
                   cy="380"
@@ -390,7 +390,7 @@
                   stroke-width="2"
                 />
               </g>
-            </svg></div></div><div class="legend"><span id="legend-min">0 ADC</span><div class="gradient"></div><span id="legend-max">4095 ADC</span></div><p id="cop-status" class="muted small">Raw mode shows an ADC-weighted signal-centre pointer. Force mode shows CoP only with valid calibration on all 16 channels. Coordinates use SVG units, not millimetres.</p><details><summary>Preserved layout: channel-label note</summary><p class="small muted">The supplied SVG labels zone-9 as “11”, zone-10 as “9”, and zone-11 as “10”. Geometry, labels, paths, clipping and blur are preserved exactly. Calibration and data use the channel IDs S0–S15. Verify physical wiring before interpreting locations. CoP is an estimate from the sampled sensors, not a full-foot pressure measurement.</p></details></section>
+            </svg></div></div><div class="legend"><span id="legend-min">0 ADC</span><div class="gradient"></div><span id="legend-max">4095 ADC</span></div><p id="cop-status" class="muted small">Raw mode shows an ADC-weighted signal-centre pointer. Force mode shows CoP only with valid calibration on all 16 channels. Coordinates use SVG units, not millimetres.</p><details><summary>Preserved layout: channel-label note</summary><p class="small muted">IDs 9 and 11 have been swapped in both SVG views as requested. Labels and positions are unchanged: zone-9 displays “10”, zone-10 displays “9”, and zone-11 displays “11”. Geometry, paths, clipping and blur are preserved exactly. Calibration and data use the channel IDs S0–S15. Verify physical wiring before interpreting locations. CoP is an estimate from the sampled sensors, not a full-foot pressure measurement.</p></details></section>
 <section class="card"><div class="visual-toolbar"><div><div class="section-label">CHANNEL READOUT</div><h2>Signals &amp; force estimates</h2></div><span class="pill">12-bit · 0–4095</span></div><div id="readings" class="readings"></div><p class="muted small">“Uncalibrated” and “Outside range” are not zero force. Colours represent sampled signal or force, not pressure per unit area.</p></section>
 <section class="card guide"><h2>A practical calibration workflow</h2><ol><li>Place the assembled sensor on a rigid support on the scale. Tare the support and insole before adding the loading disc. Ensure all applied force passes through the selected sensor.</li><li>Capture the unloaded point. Apply several stable, known loads through the same disc and capture each one. The app averages one second of fresh readings.</li><li>Repeat loads to check variability. Calibrate every channel separately, including the different sensor sizes. Do not reuse the old layer’s resistance-to-force values.</li><li>A 5 kg scale tests only about 49 N. Higher walking loads remain outside range until measured with a suitable reference. Static calibration does not establish treadmill accuracy.</li></ol></section>
 </div></div>
