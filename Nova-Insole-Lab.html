@@ -451,6 +451,67 @@ class InsoleDecoder {
   }
 }
 globalThis.InsoleDecoder=InsoleDecoder;
+</script><script>// Read-only CDC ACM transport for the Seeed XIAO's existing TinyUSB Serial port.
+// Used only when native Web Serial is unavailable (for example Android Chrome).
+// CDC requests: SET_LINE_CODING (0x20), SET_CONTROL_LINE_STATE (0x22).
+class InsoleUsbCdcPort {
+  constructor(device) { this.device=device;this.readable=null;this.running=false;this.closing=null; }
+  static async requestPort() {
+    const device=await navigator.usb.requestDevice({filters:[{vendorId:0x2886}]});
+    return new InsoleUsbCdcPort(device);
+  }
+  findInterfaces() {
+    for(const configuration of this.device.configurations){
+      for(const control of configuration.interfaces){
+        const controlAlt=control.alternates.find(a=>a.interfaceClass===2&&a.interfaceSubclass===2);
+        if(!controlAlt)continue;
+        // The XIAO TinyUSB CDC function pairs adjacent control/data interfaces.
+        const data=configuration.interfaces.find(i=>i.interfaceNumber===control.interfaceNumber+1);
+        const dataAlt=data?.alternates.find(a=>a.interfaceClass===10&&a.endpoints.some(e=>e.type==='bulk'&&e.direction==='in'));
+        if(dataAlt){return {configuration,control,controlAlt,data,dataAlt,
+          endpoint:dataAlt.endpoints.find(e=>e.type==='bulk'&&e.direction==='in')};}
+      }
+    }
+    throw new Error('No compatible XIAO serial interface. Start the normal InsoleRaw12 sketch, not the bootloader.');
+  }
+  async open({baudRate=115200}={}) {
+    try{
+      const selected=this.findInterfaces();
+      await this.device.open();
+      if(this.device.configuration?.configurationValue!==selected.configuration.configurationValue)
+        await this.device.selectConfiguration(selected.configuration.configurationValue);
+      await this.device.claimInterface(selected.control.interfaceNumber);
+      await this.device.claimInterface(selected.data.interfaceNumber);
+      await this.device.selectAlternateInterface(selected.control.interfaceNumber,selected.controlAlt.alternateSetting);
+      await this.device.selectAlternateInterface(selected.data.interfaceNumber,selected.dataAlt.alternateSetting);
+      const line=new Uint8Array(7);new DataView(line.buffer).setUint32(0,baudRate,true);line[6]=8;
+      const setup={requestType:'class',recipient:'interface',index:selected.control.interfaceNumber};
+      for(const [request,value,payload] of [[0x20,0,line],[0x22,1,new Uint8Array()]]){
+        const result=await this.device.controlTransferOut({...setup,request,value},payload);
+        if(result.status!=='ok')throw new Error(`USB serial setup failed (${result.status}).`);
+      }
+      // DTR above is essential: firmware's `if (Serial)` gates USB output.
+      this.running=true;
+      this.readable=new ReadableStream({
+        pull:async controller=>{
+          try{
+            const result=await this.device.transferIn(selected.endpoint.endpointNumber,selected.endpoint.packetSize);
+            if(!this.running)return;
+            if(result.status!=='ok')throw new Error(`USB read failed (${result.status}).`);
+            if(result.data?.byteLength)controller.enqueue(new Uint8Array(result.data.buffer,result.data.byteOffset,result.data.byteLength).slice());
+          }catch(error){if(this.running){this.running=false;controller.error(error);}}
+        },
+        // Closing the USB device cancels an outstanding transferIn, including at idle.
+        cancel:()=>this.close(),
+      },{highWaterMark:0});
+    }catch(error){await this.close().catch(()=>{});throw error;}
+  }
+  async close() {
+    this.running=false;
+    if(!this.closing)this.closing=(async()=>{if(this.device.opened)await this.device.close();})();
+    await this.closing;
+  }
+}
 </script><script>// Bounded buffering: close each CSV segment so completed data survives tab loss.
 class DiskRecorder {
   constructor(directory, metadata, header, onError) {
@@ -552,7 +613,7 @@ function forceFor(channel,adc,cal=calibration){
 function fresh(){return latest&&performance.now()-lastArrival<1500;}
 function status(message){$('status').textContent=message;}
 function controls(){
-  $('usb').disabled=busy||!!mode||!navigator.serial;
+  $('usb').disabled=busy||!!mode||(!navigator.serial&&!navigator.usb)||!window.isSecureContext;
   $('ble').disabled=busy||!!mode||!navigator.bluetooth;
   $('disconnect').disabled=busy||!mode;
   $('demo').disabled=busy||!!mode;
@@ -576,8 +637,8 @@ async function disconnect(){
 $('disconnect').onclick=disconnect;
 $('usb').onclick=async()=>{
   busy=true;controls();let opened=false;
-  try{port=await navigator.serial.requestPort();await port.open({baudRate:115200});opened=true;reader=port.readable.getReader();beginConnection('USB');readTask=readSerial();}
-  catch(e){if(opened&&port){try{await port.close();}catch{}}port=null;finishConnection('USB: '+e.message);}
+  try{port=navigator.serial?await navigator.serial.requestPort():await InsoleUsbCdcPort.requestPort();await port.open({baudRate:115200});opened=true;reader=port.readable.getReader();beginConnection('USB');readTask=readSerial();}
+  catch(e){if(opened&&port){try{await port.close();}catch{}}port=null;finishConnection(usbErrorMessage(e));}
   finally{busy=false;controls();}
 };
 async function readSerial(){
@@ -718,7 +779,13 @@ $('import-cal').onclick=()=>$('cal-file').click();
 $('cal-file').onchange=async()=>{const file=$('cal-file').files[0];if(!file)return;try{if(recording||capture)throw Error('Stop recording/capture first.');if(file.size>1000000)throw Error('File is too large.');const next=validateCalibration(JSON.parse(await file.text()));if(!confirm('Replace all 16 channel calibrations with this file?'))return;calibration=next;try{localStorage.setItem(STORAGE,JSON.stringify(calibration));}catch{}renderCalibration();$('cal-message').textContent='Calibration imported. Confirm it belongs to this layer, board and loading setup.';}catch(e){$('cal-message').textContent='Import failed: '+e.message;}finally{$('cal-file').value='';}};
 $('display-mode').onchange=()=>{pointerState=null;renderReadings();};$('force-scale').oninput=renderReadings;
 for(const id of ['pointer-noise','pointer-smoothing'])$(id).oninput=()=>{pointerState=null;renderReadings();};
-$('support').textContent=[!navigator.serial?'Web Serial unavailable.':'',!navigator.bluetooth?'Web Bluetooth unavailable.':'','For hardware, use a supported desktop browser on localhost or HTTPS.'].filter(Boolean).join(' ');
+function usbErrorMessage(error){
+  if(error.name==='NotFoundError'||error.name==='AbortError')return 'USB selection cancelled or no device selected. On Android, use a USB data/OTG connection and select the Seeed XIAO. If it is absent, check that the phone detects the USB device and the normal sketch is running.';
+  if(!navigator.serial&&['SecurityError','NetworkError','NotAllowedError','InvalidStateError'].includes(error.name))return `Android USB access failed: ${error.message} Close other USB apps, reconnect and grant permission. If Android or the browser reserves this interface, WebUSB cannot use it; a native Android USB app or a firmware WebUSB interface is needed.`;
+  return 'USB: '+error.message;
+}
+$('usb').textContent=!navigator.serial&&navigator.usb?'Connect USB (Android / WebUSB)':'Connect USB';
+$('support').textContent=[!window.isSecureContext?'Open the HTTPS GitHub Pages link.':'',!navigator.serial?(navigator.usb?'Android USB uses WebUSB. Connect a data-capable USB cable/OTG adapter, allow USB access, and choose the Seeed XIAO.':'This browser has no supported USB API.'):'USB uses native Web Serial.',!navigator.bluetooth?'Web Bluetooth unavailable.':'','Keep the page open and the phone awake while recording.'].filter(Boolean).join(' ');
 window.addEventListener('beforeunload',e=>{if(recording||diskStarting||diskFinishing||session?.rows.length||disk?.pendingCount()){e.preventDefault();e.returnValue='';}});
 setInterval(()=>{controls();if(disk&&recording&&!disk.error)$('disk-status').textContent=`Recording to ${session.folder} · ${disk.saved.toLocaleString()} samples saved · ${disk.pendingCount().toLocaleString()} pending. Keep this tab open.`;if(fresh())renderReadings();else if(latest){pointerState=null;$('rate').innerHTML='— <em>Hz</em>';$('cal-live').textContent='—';$('total').innerHTML='— <em>N</em>';$('cop-marker').style.opacity=0;for(let i=0;i<16;i++){$(`zone-${i}`).style.fill='#d1d5db';$(`heat-${i}`).style.opacity=0;}renderReadings();$('cop-status').textContent='CoP unavailable: the stream is stale.';status('No fresh Raw12 data. Check the firmware and connection.');}if(session)$('record-status').textContent=`${recording?'● Recording · ':''}${session.sampleCount.toLocaleString()} samples · ${((session.lastTimeMs??0)/1000).toFixed(1)} s${session.source==='demo'?' · DEMO':''}`;},150);
 renderCalibration();renderReadings();controls();
