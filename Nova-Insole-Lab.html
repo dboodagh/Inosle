@@ -457,7 +457,8 @@ globalThis.InsoleDecoder=InsoleDecoder;
 class InsoleUsbCdcPort {
   constructor(device) { this.device=device;this.readable=null;this.running=false;this.closing=null; }
   static async requestPort() {
-    const device=await navigator.usb.requestDevice({filters:[{vendorId:0x2886}]});
+    // Show all browser-accessible devices: firmware/core builds can use different USB IDs.
+    const device=await navigator.usb.requestDevice({filters:[]});
     return new InsoleUsbCdcPort(device);
   }
   findInterfaces() {
@@ -785,7 +786,7 @@ function usbErrorMessage(error){
   return 'USB: '+error.message;
 }
 $('usb').textContent=!navigator.serial&&navigator.usb?'Connect USB (Android / WebUSB)':'Connect USB';
-$('support').textContent=[!window.isSecureContext?'Open the HTTPS GitHub Pages link.':'',!navigator.serial?(navigator.usb?'Android USB uses WebUSB. Connect a data-capable USB cable/OTG adapter, allow USB access, and choose the Seeed XIAO.':'This browser has no supported USB API.'):'USB uses native Web Serial.',!navigator.bluetooth?'Web Bluetooth unavailable.':'','Keep the page open and the phone awake while recording.'].filter(Boolean).join(' ');
+$('support').textContent=[!window.isSecureContext?'Open the HTTPS GitHub Pages link.':'',!navigator.serial?(navigator.usb?'Android USB v2: the chooser shows all browser-accessible USB devices. Choose your XIAO / Smart Insole. If the list is empty, unlock the phone, reconnect and check Android USB access.':'This browser has no supported USB API.'):'USB uses native Web Serial.',!navigator.bluetooth?'Web Bluetooth unavailable.':'','Keep the page open and the phone awake while recording.'].filter(Boolean).join(' ');
 window.addEventListener('beforeunload',e=>{if(recording||diskStarting||diskFinishing||session?.rows.length||disk?.pendingCount()){e.preventDefault();e.returnValue='';}});
 setInterval(()=>{controls();if(disk&&recording&&!disk.error)$('disk-status').textContent=`Recording to ${session.folder} · ${disk.saved.toLocaleString()} samples saved · ${disk.pendingCount().toLocaleString()} pending. Keep this tab open.`;if(fresh())renderReadings();else if(latest){pointerState=null;$('rate').innerHTML='— <em>Hz</em>';$('cal-live').textContent='—';$('total').innerHTML='— <em>N</em>';$('cop-marker').style.opacity=0;for(let i=0;i<16;i++){$(`zone-${i}`).style.fill='#d1d5db';$(`heat-${i}`).style.opacity=0;}renderReadings();$('cop-status').textContent='CoP unavailable: the stream is stale.';status('No fresh Raw12 data. Check the firmware and connection.');}if(session)$('record-status').textContent=`${recording?'● Recording · ':''}${session.sampleCount.toLocaleString()} samples · ${((session.lastTimeMs??0)/1000).toFixed(1)} s${session.source==='demo'?' · DEMO':''}`;},150);
 renderCalibration();renderReadings();controls();
