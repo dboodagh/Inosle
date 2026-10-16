@@ -9,7 +9,7 @@
 <section class="intro"><div><div class="eyebrow">ACQUIRE · CALIBRATE · UNDERSTAND</div><h1>Every step, measured.</h1><p>Raw signals first. Newtons backed by your own calibration.</p></div><button id="demo" class="secondary">Explore demo</button></section>
 <section class="metrics" aria-label="Acquisition status"><div><small>RECEIVED RATE</small><strong id="rate">— <em>Hz</em></strong></div><div><small>MISSING SCANS</small><strong id="gaps">0</strong></div><div><small>CALIBRATED CHANNELS</small><strong id="cal-count">0 <em>/ 16</em></strong></div><div><small>MEASURED SENSOR SUM</small><strong id="total">— <em>N</em></strong></div></section>
 <div class="workspace"><aside>
-<section class="card"><div class="section-label">01 / CONNECT</div><h2>Bring your insole online</h2><p class="muted">Requires the new <b>InsoleRaw12</b> firmware. The original 16-byte firmware is not compatible.</p><div class="button-stack"><button id="usb">Connect USB</button><button id="ble" class="secondary">Connect Bluetooth</button><button id="disconnect" class="secondary" disabled>Disconnect</button></div><p id="status" role="status" aria-live="polite">Ready. Connect a device or explore the demo.</p><p id="support" class="muted small"></p></section>
+<section class="card"><div class="section-label">01 / CONNECT</div><h2>Bring your insole online</h2><p class="muted">Use <b>InsoleRaw12</b> for desktop serial, or <b>InsoleRaw12WebUSB</b> for Android Chrome USB. The original 16-byte firmware is not compatible.</p><div class="button-stack"><button id="usb">Connect USB</button><button id="ble" class="secondary">Connect Bluetooth</button><button id="disconnect" class="secondary" disabled>Disconnect</button></div><p id="status" role="status" aria-live="polite">Ready. Connect a device or explore the demo.</p><p id="support" class="muted small"></p></section>
 <section class="card"><div class="section-label">02 / RECORD</div><h2>Capture a session</h2><label>Session name<input id="session-name" maxlength="80" value="Treadmill walk"></label><button id="record" disabled>Start recording</button><button id="record-disk" class="secondary" disabled>Record to disk</button><p id="disk-status" class="small muted" role="status"></p><p id="record-status" role="status">No samples recorded.</p><div class="button-row"><button id="csv" class="secondary" disabled>Export CSV</button><button id="session-json" class="secondary" disabled>Session JSON</button></div><p class="muted small">CSV includes raw ADC, force validity and acquisition timestamps. Session JSON includes the exact calibration used. Standard recording stays in this tab until exported. Record to disk saves CSV segments in a folder you choose, about every 30 seconds. Keep this tab open and the computer awake; wait for “Saved to disk” before closing.</p></section>
 <section class="card"><div class="section-label">03 / CALIBRATE</div><h2>One sensor at a time</h2><p class="muted small">Use a scale as the force reference. A thumb applies force; it cannot measure it. Keep the loading disc and support consistent.</p><label>Sensor<select id="sensor"></select></label><div class="live-reading"><span>LIVE ADC</span><b id="cal-live">—</b></div><div class="button-row"><label>Reference load<input id="load" type="number" min="0" step="any" value="0"></label><label>Unit<select id="unit"><option value="g">grams</option><option value="kg">kilograms</option><option value="N">newtons</option></select></label></div><button id="capture" disabled>Capture 1-second average</button><p id="cal-message" role="status" class="small">Start with an unloaded 0 N point, then add at least two known loads.</p><div id="points" class="point-list"></div><div class="button-row"><button id="export-cal" class="secondary">Export calibration</button><button id="import-cal" class="secondary">Import</button></div><input id="cal-file" type="file" accept=".json,application/json" hidden><p class="muted small">Repeat loading and unloading to check repeatability; validate at loads not used for calibration. No force is extrapolated beyond your measured range.</p></section>
 </aside>
@@ -451,7 +451,7 @@ class InsoleDecoder {
   }
 }
 globalThis.InsoleDecoder=InsoleDecoder;
-</script><script>// Read-only CDC ACM transport for the Seeed XIAO's existing TinyUSB Serial port.
+</script><script>// Read-only adapter for dedicated TinyUSB WebUSB, with legacy CDC ACM fallback.
 // Used only when native Web Serial is unavailable (for example Android Chrome).
 // CDC requests: SET_LINE_CODING (0x20), SET_CONTROL_LINE_STATE (0x22).
 class InsoleUsbCdcPort {
@@ -462,6 +462,13 @@ class InsoleUsbCdcPort {
     return new InsoleUsbCdcPort(device);
   }
   findInterfaces() {
+    // Dedicated TinyUSB WebUSB interface takes precedence; do not claim CDC.
+    for(const configuration of this.device.configurations){
+      for(const data of configuration.interfaces){
+        const dataAlt=data.alternates.find(a=>a.interfaceClass===255&&a.endpoints.some(e=>e.type==='bulk'&&e.direction==='in')&&a.endpoints.some(e=>e.type==='bulk'&&e.direction==='out'));
+        if(dataAlt)return {kind:'webusb',configuration,data,dataAlt,endpoint:dataAlt.endpoints.find(e=>e.type==='bulk'&&e.direction==='in')};
+      }
+    }
     for(const configuration of this.device.configurations){
       for(const control of configuration.interfaces){
         const controlAlt=control.alternates.find(a=>a.interfaceClass===2&&a.interfaceSubclass===2);
@@ -469,7 +476,7 @@ class InsoleUsbCdcPort {
         // The XIAO TinyUSB CDC function pairs adjacent control/data interfaces.
         const data=configuration.interfaces.find(i=>i.interfaceNumber===control.interfaceNumber+1);
         const dataAlt=data?.alternates.find(a=>a.interfaceClass===10&&a.endpoints.some(e=>e.type==='bulk'&&e.direction==='in'));
-        if(dataAlt){return {configuration,control,controlAlt,data,dataAlt,
+        if(dataAlt){return {kind:'cdc',configuration,control,controlAlt,data,dataAlt,
           endpoint:dataAlt.endpoints.find(e=>e.type==='bulk'&&e.direction==='in')};}
       }
     }
@@ -481,13 +488,14 @@ class InsoleUsbCdcPort {
       await this.device.open();
       if(this.device.configuration?.configurationValue!==selected.configuration.configurationValue)
         await this.device.selectConfiguration(selected.configuration.configurationValue);
-      await this.device.claimInterface(selected.control.interfaceNumber);
+      if(selected.kind==='cdc')await this.device.claimInterface(selected.control.interfaceNumber);
       await this.device.claimInterface(selected.data.interfaceNumber);
-      await this.device.selectAlternateInterface(selected.control.interfaceNumber,selected.controlAlt.alternateSetting);
+      if(selected.kind==='cdc')await this.device.selectAlternateInterface(selected.control.interfaceNumber,selected.controlAlt.alternateSetting);
       await this.device.selectAlternateInterface(selected.data.interfaceNumber,selected.dataAlt.alternateSetting);
       const line=new Uint8Array(7);new DataView(line.buffer).setUint32(0,baudRate,true);line[6]=8;
-      const setup={requestType:'class',recipient:'interface',index:selected.control.interfaceNumber};
-      for(const [request,value,payload] of [[0x20,0,line],[0x22,1,new Uint8Array()]]){
+      const setup={requestType:'class',recipient:'interface',index:selected.kind==='cdc'?selected.control.interfaceNumber:selected.data.interfaceNumber};
+      const requests=selected.kind==='cdc'?[[0x20,0,line],[0x22,1,new Uint8Array()]]:[[0x22,1,new Uint8Array()]];
+      for(const [request,value,payload] of requests){
         const result=await this.device.controlTransferOut({...setup,request,value},payload);
         if(result.status!=='ok')throw new Error(`USB serial setup failed (${result.status}).`);
       }
@@ -786,7 +794,7 @@ function usbErrorMessage(error){
   return 'USB: '+error.message;
 }
 $('usb').textContent=!navigator.serial&&navigator.usb?'Connect USB (Android / WebUSB)':'Connect USB';
-$('support').textContent=[!window.isSecureContext?'Open the HTTPS GitHub Pages link.':'',!navigator.serial?(navigator.usb?'Android USB v2: the chooser shows all browser-accessible USB devices. Choose your XIAO / Smart Insole. If the list is empty, unlock the phone, reconnect and check Android USB access.':'This browser has no supported USB API.'):'USB uses native Web Serial.',!navigator.bluetooth?'Web Bluetooth unavailable.':'','Keep the page open and the phone awake while recording.'].filter(Boolean).join(' ');
+$('support').textContent=[!window.isSecureContext?'Open the HTTPS GitHub Pages link.':'',!navigator.serial?(navigator.usb?'Android USB v3: use the InsoleRaw12WebUSB firmware. The chooser shows all browser-accessible USB devices. Choose your XIAO / Smart Insole. If the list is empty, unlock the phone, reconnect and check Android USB access.':'This browser has no supported USB API.'):'USB uses native Web Serial.',!navigator.bluetooth?'Web Bluetooth unavailable.':'','Keep the page open and the phone awake while recording.'].filter(Boolean).join(' ');
 window.addEventListener('beforeunload',e=>{if(recording||diskStarting||diskFinishing||session?.rows.length||disk?.pendingCount()){e.preventDefault();e.returnValue='';}});
 setInterval(()=>{controls();if(disk&&recording&&!disk.error)$('disk-status').textContent=`Recording to ${session.folder} · ${disk.saved.toLocaleString()} samples saved · ${disk.pendingCount().toLocaleString()} pending. Keep this tab open.`;if(fresh())renderReadings();else if(latest){pointerState=null;$('rate').innerHTML='— <em>Hz</em>';$('cal-live').textContent='—';$('total').innerHTML='— <em>N</em>';$('cop-marker').style.opacity=0;for(let i=0;i<16;i++){$(`zone-${i}`).style.fill='#d1d5db';$(`heat-${i}`).style.opacity=0;}renderReadings();$('cop-status').textContent='CoP unavailable: the stream is stale.';status('No fresh Raw12 data. Check the firmware and connection.');}if(session)$('record-status').textContent=`${recording?'● Recording · ':''}${session.sampleCount.toLocaleString()} samples · ${((session.lastTimeMs??0)/1000).toFixed(1)} s${session.source==='demo'?' · DEMO':''}`;},150);
 renderCalibration();renderReadings();controls();
