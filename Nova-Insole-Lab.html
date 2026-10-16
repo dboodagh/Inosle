@@ -1,5 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Nova · Insole Lab</title><style>:root{--ink:#172e32;--muted:#627579;--line:#dce5e2;--accent:#126f62;--paper:#f4f6f3;--white:#fff}*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.topbar{padding:20px 4%;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between}.brand{display:flex;align-items:center;gap:13px;letter-spacing:2px;font-weight:750}.brand-mark{display:grid;place-items:center;background:var(--accent);color:white;width:42px;height:42px;border-radius:13px;font-size:32px;font-family:serif;font-style:italic}.brand-light{font-weight:400;color:var(--muted);font-size:12px}.brand small{display:block;letter-spacing:.4px;font-size:10px;font-weight:400;color:var(--muted)}main{max-width:1460px;margin:auto;padding:36px 4%}.intro{display:flex;justify-content:space-between;align-items:center;margin-bottom:28px;gap:20px}.eyebrow,.section-label{font-size:10px;font-weight:750;letter-spacing:1.8px;color:var(--accent)}h1{font-size:clamp(28px,3vw,40px);letter-spacing:-1.5px;line-height:1.2;margin:9px 0}h2{font-size:18px;line-height:1.3;letter-spacing:-.4px;margin:8px 0 14px}h3{font-size:15px;margin:4px 0 8px}p{margin:10px 0}.intro p{color:var(--muted);font-size:15px}.metrics{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line);background:#fff;border-radius:16px;margin-bottom:24px;overflow:hidden}.metrics>div{padding:19px 24px;border-right:1px solid var(--line)}.metrics>div:last-child{border:0}.metrics small{display:block;color:var(--muted);font-size:10px;letter-spacing:1.2px}.metrics strong{display:block;font-size:29px;font-weight:600;margin-top:5px;font-variant-numeric:tabular-nums}.metrics em{font-size:14px;font-style:normal;color:var(--muted);font-weight:400}.workspace{display:grid;grid-template-columns:320px minmax(0,1fr);gap:24px}aside,.visual-column{display:flex;flex-direction:column;gap:20px}.card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:22px;min-width:0}.muted{color:var(--muted)}.small{font-size:12px}.button-stack{display:grid;gap:8px}.button-row{display:flex;gap:8px;align-items:end}.button-row>*{flex:1;min-width:0}button{border:1px solid transparent;border-radius:9px;background:var(--accent);color:white;font:600 13px/1.3 inherit;font-family:inherit;font-size:13px;font-weight:600;padding:11px 14px;cursor:pointer;transition:background .15s}button:hover{background:#0c564b}button.secondary{background:#fff;color:var(--ink);border-color:var(--line)}button.secondary:hover{background:#edf4f1}button:disabled{opacity:.45;cursor:not-allowed}button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid #9ad3c3;outline-offset:2px}#record,#capture{width:100%;margin-top:10px}label{display:block;font-size:11px;font-weight:600;color:var(--muted);margin:10px 0}input,select{display:block;width:100%;border:1px solid var(--line);border-radius:7px;background:#fcfdfc;color:var(--ink);padding:9px;font:14px inherit;font-family:inherit;font-size:14px;margin-top:5px}#status{font-size:12px;padding:10px;background:#f0f5f2;border-radius:7px;overflow-wrap:anywhere}.pill{display:inline-block;background:#eef4f1;color:var(--accent);padding:6px 11px;border-radius:20px;font-size:11px;white-space:nowrap}.visual-toolbar{display:flex;justify-content:space-between;gap:20px;align-items:center}.visual-toolbar h2{margin-bottom:8px}.visual-toolbar label{margin:0}.maps{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:18px}.map{text-align:center;min-width:0;background:#f9faf8;border:1px solid #edf0eb;border-radius:12px;padding:12px 0}.map svg{display:block;max-width:100%;height:auto;margin:auto}.legend{display:flex;align-items:center;gap:12px;max-width:420px;margin:20px auto 14px;font-size:11px;color:var(--muted)}.gradient{height:7px;flex:1;border-radius:10px;background:linear-gradient(90deg,#d1d5db,#75e73d,#f1ec28,#f02f25)}details{border-top:1px solid var(--line);padding-top:12px}summary{cursor:pointer;font-size:12px;color:var(--muted)}.readings{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-top:15px}.reading{border:1px solid var(--line);border-radius:9px;padding:10px;font-variant-numeric:tabular-nums}.reading small{display:flex;justify-content:space-between;color:var(--muted);font-size:10px}.reading b{display:block;font-size:20px;font-weight:600;margin:4px 0}.reading span{font-size:10px;color:var(--muted)}.live-reading{display:flex;justify-content:space-between;background:#eef5f1;padding:12px;border-radius:8px;align-items:center}.live-reading span{font-size:10px;letter-spacing:1px}.live-reading b{font-size:25px;font-variant-numeric:tabular-nums}.point-list{max-height:200px;overflow:auto;margin:12px 0}.point{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);font-size:12px}.point button{padding:4px 8px;background:#f8efed;color:#963b2c;font-size:11px}.guide ol{padding-left:20px;color:var(--muted);font-size:13px}.guide li{margin:9px 0}footer{font-size:11px;color:var(--muted);text-align:center;margin-top:30px}.recording{background:#a23b30!important}.insole-zone{transition:fill .1s ease;stroke:#374151;stroke-width:1.5;stroke-linejoin:round;stroke-dasharray:4 2}.insole-zone-text{font-size:18px;font-weight:700;fill:#1f2937;pointer-events:none;text-anchor:middle;dominant-baseline:middle;opacity:.7}.heatmap-blob{transition:opacity .1s ease,fill .1s ease;mix-blend-mode:multiply}#cop-marker{transition:cx .1s linear,cy .1s linear,opacity .2s;pointer-events:none;filter:drop-shadow(0px 0px 2px rgba(0,0,0,.5))}[hidden]{display:none!important}@media(max-width:1050px){.workspace{grid-template-columns:275px minmax(0,1fr)}.readings{grid-template-columns:repeat(2,1fr)}.visual-toolbar{flex-wrap:wrap}.card{padding:17px}}@media(max-width:760px){main{padding:25px 16px}.workspace{display:flex;flex-direction:column}.metrics{grid-template-columns:repeat(2,1fr)}.metrics>div{padding:12px 18px;border-bottom:1px solid var(--line)}.intro{align-items:start}.intro button{max-width:120px}.maps{gap:5px}.map{padding:8px 0}.map h3{font-size:12px}.readings{grid-template-columns:repeat(4,1fr)}.reading{padding:6px}.reading b{font-size:17px}.brand-light{font-size:10px}.topbar{padding:15px}.visual-toolbar .button-row{width:100%}}
+
+#record-disk{width:100%;margin-top:8px}#disk-status{overflow-wrap:anywhere}
 </style></head>
 <body>
 <header class="topbar"><div class="brand"><span class="brand-mark">n</span><div>NOVA <span class="brand-light">/ INSOLE LAB</span><small>16-channel sensing workspace</small></div></div><span id="connection-pill" class="pill">Offline</span></header>
@@ -8,7 +10,7 @@
 <section class="metrics" aria-label="Acquisition status"><div><small>RECEIVED RATE</small><strong id="rate">— <em>Hz</em></strong></div><div><small>MISSING SCANS</small><strong id="gaps">0</strong></div><div><small>CALIBRATED CHANNELS</small><strong id="cal-count">0 <em>/ 16</em></strong></div><div><small>MEASURED SENSOR SUM</small><strong id="total">— <em>N</em></strong></div></section>
 <div class="workspace"><aside>
 <section class="card"><div class="section-label">01 / CONNECT</div><h2>Bring your insole online</h2><p class="muted">Requires the new <b>InsoleRaw12</b> firmware. The original 16-byte firmware is not compatible.</p><div class="button-stack"><button id="usb">Connect USB</button><button id="ble" class="secondary">Connect Bluetooth</button><button id="disconnect" class="secondary" disabled>Disconnect</button></div><p id="status" role="status" aria-live="polite">Ready. Connect a device or explore the demo.</p><p id="support" class="muted small"></p></section>
-<section class="card"><div class="section-label">02 / RECORD</div><h2>Capture a session</h2><label>Session name<input id="session-name" maxlength="80" value="Treadmill walk"></label><button id="record" disabled>Start recording</button><p id="record-status" role="status">No samples recorded.</p><div class="button-row"><button id="csv" class="secondary" disabled>Export CSV</button><button id="session-json" class="secondary" disabled>Session JSON</button></div><p class="muted small">CSV includes raw ADC, force validity and acquisition timestamps. Session JSON includes the exact calibration used. Recording stays in this tab until exported.</p></section>
+<section class="card"><div class="section-label">02 / RECORD</div><h2>Capture a session</h2><label>Session name<input id="session-name" maxlength="80" value="Treadmill walk"></label><button id="record" disabled>Start recording</button><button id="record-disk" class="secondary" disabled>Record to disk</button><p id="disk-status" class="small muted" role="status"></p><p id="record-status" role="status">No samples recorded.</p><div class="button-row"><button id="csv" class="secondary" disabled>Export CSV</button><button id="session-json" class="secondary" disabled>Session JSON</button></div><p class="muted small">CSV includes raw ADC, force validity and acquisition timestamps. Session JSON includes the exact calibration used. Standard recording stays in this tab until exported. Record to disk saves CSV segments in a folder you choose, about every 30 seconds. Keep this tab open and the computer awake; wait for “Saved to disk” before closing.</p></section>
 <section class="card"><div class="section-label">03 / CALIBRATE</div><h2>One sensor at a time</h2><p class="muted small">Use a scale as the force reference. A thumb applies force; it cannot measure it. Keep the loading disc and support consistent.</p><label>Sensor<select id="sensor"></select></label><div class="live-reading"><span>LIVE ADC</span><b id="cal-live">—</b></div><div class="button-row"><label>Reference load<input id="load" type="number" min="0" step="any" value="0"></label><label>Unit<select id="unit"><option value="g">grams</option><option value="kg">kilograms</option><option value="N">newtons</option></select></label></div><button id="capture" disabled>Capture 1-second average</button><p id="cal-message" role="status" class="small">Start with an unloaded 0 N point, then add at least two known loads.</p><div id="points" class="point-list"></div><div class="button-row"><button id="export-cal" class="secondary">Export calibration</button><button id="import-cal" class="secondary">Import</button></div><input id="cal-file" type="file" accept=".json,application/json" hidden><p class="muted small">Repeat loading and unloading to check repeatability; validate at loads not used for calibration. No force is extrapolated beyond your measured range.</p></section>
 </aside>
 <div class="visual-column"><section class="card visual-card"><div class="visual-toolbar"><div><div class="section-label">LIVE DISTRIBUTION</div><h2>Your original sensor maps</h2></div><div class="button-row"><label>Colour by<select id="display-mode"><option value="raw">Raw ADC</option><option value="force">Calibrated force</option></select></label><label id="force-scale-label" hidden>Colour ceiling (N)<input id="force-scale" type="number" min="0.1" step="any" value="100"></label></div></div><div class="maps"><div class="map"><h3>Sensor Layout</h3><svg
@@ -449,6 +451,65 @@ class InsoleDecoder {
   }
 }
 globalThis.InsoleDecoder=InsoleDecoder;
+</script><script>// Bounded buffering: close each CSV segment so completed data survives tab loss.
+class DiskRecorder {
+  constructor(directory, metadata, header, onError) {
+    this.directory=directory; this.metadata=metadata; this.header=header; this.onError=onError;
+    this.buffer=[]; this.queue=[]; this.parts=[]; this.nextPart=1; this.work=null;
+    this.error=null; this.closed=false; this.total=0; this.saved=0;
+  }
+  async writeFile(name, text) {
+    const handle=await this.directory.getFileHandle(name,{create:true});
+    const stream=await handle.createWritable();
+    try { await stream.write(text); await stream.close(); }
+    catch(error) { try { await stream.abort(); } catch {} throw error; }
+  }
+  async writeMetadata(state) {
+    await this.writeFile('session.json',JSON.stringify({...this.metadata,state,
+      samplesReceived:this.total,samplesSaved:this.saved,segments:this.parts,
+      stoppedUTC:this.closed?new Date().toISOString():null},null,2));
+  }
+  async initialize() { await this.writeMetadata('recording'); }
+  append(line) {
+    if(this.error||this.closed)return;
+    this.buffer.push(line);this.total++;
+    if(this.buffer.length>=6000)this.flush();
+  }
+  fail(error) {
+    if(this.error)return;
+    this.error=error;
+    queueMicrotask(()=>this.onError(error));
+  }
+  flush() {
+    if(this.error||!this.buffer.length)return;
+    if(this.queue.length>=2){this.fail(new Error('Disk cannot keep up. Recording stopped; download pending data.'));return;}
+    this.queue.push({name:`part-${String(this.nextPart++).padStart(5,'0')}.csv`,lines:this.buffer});
+    this.buffer=[];
+    if(!this.work)this.work=this.drain().finally(()=>{this.work=null;});
+  }
+  async drain() {
+    try {
+      while(this.queue.length&&!this.error) {
+        const part=this.queue[0];
+        await this.writeFile(part.name,this.header+'\n'+part.lines.join('\n')+'\n');
+        this.saved+=part.lines.length;
+        this.parts.push({file:part.name,samples:part.lines.length});
+        this.queue.shift();
+        await this.writeMetadata('recording');
+      }
+    } catch(error) { this.fail(error); }
+  }
+  async finish() {
+    this.closed=true;this.flush();
+    if(this.work)await this.work;
+    if(!this.error)try{await this.writeMetadata('complete');}catch(error){this.fail(error);}
+  }
+  pendingCount() { return this.queue.reduce((n,p)=>n+p.lines.length,0)+this.buffer.length; }
+  recoveryCSV() {
+    const lines=[...this.queue.flatMap(p=>p.lines),...this.buffer];
+    return lines.length?this.header+'\n'+lines.join('\n')+'\n':null;
+  }
+}
 </script><script>'use strict';
 const $=id=>document.getElementById(id);
 const SERVICE='19b10000-e8f2-537e-4f6c-d104768a1214', CHARACTERISTIC='19b10001-e8f2-537e-4f6c-d104768a1214';
@@ -461,6 +522,7 @@ let calibration={schema:PROTOCOL,id:crypto.randomUUID(),channels:Array.from({len
 let mode=null,busy=false,port=null,reader=null,readTask=null,device=null,characteristic=null,demoTimer=null;
 let latest=null,lastArrival=0,history=[],rateWindow=[],missing=0,recording=false,session=null,capture=null;
 let pointerState=null;
+let disk=null,diskStarting=false,diskFinishing=false,diskTimer=null;
 const decoder=new InsoleDecoder(onFrame);
 const coords=Array.from({length:16},(_,i)=>({x:Number($(`heat-${i}`).getAttribute('cx')),y:Number($(`heat-${i}`).getAttribute('cy'))}));
 function validateCalibration(c){
@@ -494,11 +556,13 @@ function controls(){
   $('ble').disabled=busy||!!mode||!navigator.bluetooth;
   $('disconnect').disabled=busy||!mode;
   $('demo').disabled=busy||!!mode;
-  $('record').disabled=!recording&&(!mode||!fresh());
-  $('capture').disabled=recording||!!capture||!fresh()||mode==='demo';
-  for(const id of ['sensor','load','unit','import-cal','session-name'])$(id).disabled=recording||!!capture;
-  $('csv').disabled=recording||!session?.rows.length;
-  $('session-json').disabled=recording||!session?.rows.length;
+  $('record').disabled=diskStarting||diskFinishing||(!recording&&(!mode||!fresh()));
+  $('record-disk').disabled=diskStarting||diskFinishing||recording||!fresh()||!mode||!window.showDirectoryPicker;
+  $('record-disk').hidden=!window.showDirectoryPicker;
+  $('capture').disabled=diskStarting||diskFinishing||recording||!!capture||!fresh()||mode==='demo';
+  for(const id of ['sensor','load','unit','import-cal','session-name'])$(id).disabled=diskStarting||diskFinishing||recording||!!capture;
+  $('csv').disabled=recording||diskFinishing||!(session?.rows.length||disk?.pendingCount());
+  $('session-json').disabled=recording||diskFinishing||!session;
   $('connection-pill').textContent=mode==='demo'?'DEMO · synthetic':mode?`${mode} · ${fresh()?'Streaming':'Waiting for data'}`:'Offline';
 }
 function clearLive(){pointerState=null;latest=null;history=[];rateWindow=[];lastArrival=0;decoder.reset();$('rate').innerHTML='— <em>Hz</em>';$('cal-live').textContent='—';$('total').innerHTML='— <em>N</em>';for(let i=0;i<16;i++){$(`zone-${i}`).style.fill='#d1d5db';$(`heat-${i}`).style.opacity=0;}$('cop-marker').style.opacity=0;$('cop-status').textContent='CoP unavailable: no fresh acquisition data.';renderReadings();}
@@ -537,7 +601,14 @@ function onFrame(frame){
   const span=frame.timeMs-rateWindow[0].t;$('rate').innerHTML=(span>0?((rateWindow.length-1)*1000/span).toFixed(1):'—')+' <em>Hz</em>';
   missing+=frame.missedFrames;$('gaps').textContent=missing;
   if(mode!=='demo')status(`Receiving ${mode} · Raw12 · scan ${frame.sequence}`);
-  if(recording){if(session.firstTime===null)session.firstTime=frame.timeMs;const forces=frame.adc.map((raw,i)=>session.source==='demo'?{n:null,status:'demo'}:forceFor(i,raw,session.calibration));session.rows.push({timeMs:frame.timeMs-session.firstTime,sequence:frame.sequence,timestampUs:frame.timestampUs,missedFrames:frame.missedFrames,adc:[...frame.adc],forces});if(session.rows.length>=100000){stopRecording();$('record-status').textContent='100,000-sample limit reached. Export this session before recording more.';}}
+  if(recording&&!disk?.error){
+    if(session.firstTime===null)session.firstTime=frame.timeMs;
+    const forces=frame.adc.map((raw,i)=>session.source==='demo'?{n:null,status:'demo'}:forceFor(i,raw,session.calibration));
+    const row={timeMs:frame.timeMs-session.firstTime,sequence:frame.sequence,timestampUs:frame.timestampUs,missedFrames:frame.missedFrames,adc:[...frame.adc],forces};
+    session.sampleCount++;session.lastTimeMs=row.timeMs;
+    if(disk)disk.append(csvRow(row,session));else session.rows.push(row);
+    if(!disk&&session.rows.length>=100000)stopRecording();
+  }
   if(capture)capture.frames.push(frame);
 }
 function renderReadings(){
@@ -577,18 +648,55 @@ function renderReadings(){
     $('cop-status').textContent='No signal above the pointer noise floor. Pointer hidden to avoid unloaded jitter.';
   }
 }
+function newSession(storage){return {schema:'nova-session-v1',name:$('session-name').value.trim(),source:mode==='demo'?'demo':mode,startedUTC:new Date().toISOString(),protocol:PROTOCOL,storage,sensorToChannel:[...SENSOR_TO_CHANNEL],calibration:JSON.parse(JSON.stringify(calibration)),firstTime:null,sampleCount:0,lastTimeMs:0,rows:[]};}
+function canReplaceSession(){return !(session?.rows.length||disk?.pendingCount())||confirm('Start a new session? Export any unsaved data first. This replaces data held in this tab.');}
+function recordingUI(){recording=true;$('record').textContent='Stop recording';$('record').classList.add('recording');renderCalibration();controls();}
 function startRecording(){
-  if(!fresh()||!mode)return;
-  if(session?.rows.length&&!confirm('Start a new session? This replaces the session currently held in this tab. Export it first if needed.'))return;
-  session={schema:'nova-session-v1',name:$('session-name').value.trim(),source:mode==='demo'?'demo':mode,startedUTC:new Date().toISOString(),protocol:PROTOCOL,calibration:JSON.parse(JSON.stringify(calibration)),firstTime:null,rows:[]};recording=true;$('record').textContent='Stop recording';$('record').classList.add('recording');renderCalibration();controls();
+  if(!fresh()||!mode||diskStarting||diskFinishing||!canReplaceSession())return;
+  disk=null;session=newSession('memory');$('disk-status').textContent='';$('csv').textContent='Export CSV';recordingUI();
 }
-function stopRecording(){recording=false;if(session)session.stoppedUTC=new Date().toISOString();$('record').textContent='Start recording';$('record').classList.remove('recording');renderCalibration();controls();}
+async function startDiskRecording(){
+  if(!fresh()||!mode||recording||diskStarting||diskFinishing||!window.showDirectoryPicker||!canReplaceSession())return;
+  diskStarting=true;controls();const connectionMode=mode;
+  try{
+    const parent=await window.showDirectoryPicker({mode:'readwrite',id:'nova-recordings'});
+    if(mode!==connectionMode||!fresh())throw Error('Reconnect the insole and try again.');
+    const next=newSession('disk-segments');
+    const folder=`nova-${next.source.toLowerCase()}-${next.startedUTC.replace(/[:.]/g,'-')}-${crypto.randomUUID().slice(0,8)}`;
+    const directory=await parent.getDirectoryHandle(folder,{create:true});
+    const writer=new DiskRecorder(directory,next,CSV_HEADER,error=>{
+      $('disk-status').textContent='Disk error: '+error.message+' Completed segments remain in the folder. Export pending CSV before closing.';
+      if(recording)stopRecording();else controls();
+    });
+    await writer.initialize();
+    if(mode!==connectionMode||!fresh())throw Error('Connection ended during setup. No recording started.');
+    disk=writer;session=next;session.folder=folder;
+    $('disk-status').textContent=`Saving into ${folder}. Segments close about every 30 seconds.`;
+    $('csv').textContent='Export pending CSV';
+    recordingUI();diskTimer=setInterval(()=>disk?.flush(),30000);
+  }catch(error){$('disk-status').textContent=error.name==='AbortError'?'Folder selection cancelled.':'Could not start disk recording: '+error.message;}
+  finally{diskStarting=false;controls();}
+}
+async function stopRecording(){
+  if(diskFinishing)return;
+  recording=false;if(session)session.stoppedUTC=new Date().toISOString();
+  $('record').textContent='Start recording';$('record').classList.remove('recording');
+  clearInterval(diskTimer);diskTimer=null;
+  if(disk){diskFinishing=true;controls();if(!disk.error)$('disk-status').textContent='Finishing disk writes… Keep this tab open.';await disk.finish();diskFinishing=false;
+    if(!disk.error)$('disk-status').textContent=`Saved to disk: ${disk.saved.toLocaleString()} samples in ${disk.parts.length} CSV segments. Folder: ${session.folder}`;
+  }
+  renderCalibration();controls();
+}
 $('record').onclick=()=>recording?stopRecording():startRecording();
+$('record-disk').onclick=startDiskRecording;
+if(!window.showDirectoryPicker)$('disk-status').textContent='Direct folder saving requires a supporting desktop browser such as Chrome or Edge on HTTPS. Standard CSV export is available.';
+const CSV_HEADER=['Time_ms','Sequence','BoardMicros','MissedFrames','Source','CalibrationID',...Array.from({length:16},(_,i)=>`ADC${i}`),...Array.from({length:16},(_,i)=>`F${i}_N`),...Array.from({length:16},(_,i)=>`Status${i}`)].join(',');
+function csvRow(r,s){const quote=x=>'"'+String(x??'').replaceAll('"','""')+'"';return [r.timeMs.toFixed(3),r.sequence,r.timestampUs,r.missedFrames,s.source,s.calibration.id,...r.adc,...r.forces.map(f=>f.n===null?'':f.n.toFixed(4)),...r.forces.map(f=>f.status)].map(quote).join(',');}
 function download(name,text,type){const url=URL.createObjectURL(new Blob([text],{type}));const a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);}
 function filename(ext){return `nova-${session.source.toLowerCase()}-${session.startedUTC.replace(/[:.]/g,'-')}.${ext}`;}
-$('csv').onclick=()=>{if(!session?.rows.length)return;const header=['Time_ms','Sequence','BoardMicros','MissedFrames','Source','CalibrationID',...Array.from({length:16},(_,i)=>`ADC${i}`),...Array.from({length:16},(_,i)=>`F${i}_N`),...Array.from({length:16},(_,i)=>`Status${i}`)];const quote=x=>'"'+String(x??'').replaceAll('"','""')+'"';const rows=session.rows.map(r=>[r.timeMs.toFixed(3),r.sequence,r.timestampUs,r.missedFrames,session.source,session.calibration.id,...r.adc,...r.forces.map(f=>f.n===null?'':f.n.toFixed(4)),...r.forces.map(f=>f.status)].map(quote).join(','));download(filename('csv'),header.join(',')+'\n'+rows.join('\n'),'text/csv');};
+$('csv').onclick=()=>{if(disk){const pending=disk.recoveryCSV();if(pending)download(filename('pending.csv'),pending,'text/csv');return;}if(session?.rows.length)download(filename('csv'),CSV_HEADER+'\n'+session.rows.map(r=>csvRow(r,session)).join('\n'),'text/csv');};
 $('session-json').onclick=()=>download(filename('json'),JSON.stringify(session),'application/json');
-function renderCalibration(){const ch=Number($('sensor').value)||0;const points=calibration.channels[ch];$('cal-count').innerHTML=calibration.channels.filter(p=>p.length>=3).length+' <em>/ 16</em>';$('points').replaceChildren();for(let index=0;index<points.length;index++){const p=points[index],row=document.createElement('div');row.className='point';const text=document.createElement('span');text.textContent=`${p.adc.toFixed(1)} ADC → ${p.n.toFixed(2)} N`;row.append(text);const remove=document.createElement('button');remove.textContent='Remove';remove.disabled=recording||!!capture;remove.onclick=()=>{if(index===0&&points.length>1){$('cal-message').textContent='Remove the loaded points before removing the zero reference.';return;}points.splice(index,1);persist();};row.append(remove);$('points').append(row);}controls();}
+function renderCalibration(){const ch=Number($('sensor').value)||0;const points=calibration.channels[ch];$('cal-count').innerHTML=calibration.channels.filter(p=>p.length>=3).length+' <em>/ 16</em>';$('points').replaceChildren();for(let index=0;index<points.length;index++){const p=points[index],row=document.createElement('div');row.className='point';const text=document.createElement('span');text.textContent=`${p.adc.toFixed(1)} ADC → ${p.n.toFixed(2)} N`;row.append(text);const remove=document.createElement('button');remove.textContent='Remove';remove.disabled=diskStarting||diskFinishing||recording||!!capture;remove.onclick=()=>{if(index===0&&points.length>1){$('cal-message').textContent='Remove the loaded points before removing the zero reference.';return;}points.splice(index,1);persist();};row.append(remove);$('points').append(row);}controls();}
 for(let i=0;i<16;i++){const o=document.createElement('option');o.value=SENSOR_TO_CHANNEL[i];o.textContent=`Sensor ${i}${i===0?' · Big toe':i<4?' · Small toe':''}`;$('sensor').append(o);}
 $('sensor').onchange=()=>{renderCalibration();renderReadings();};
 $('capture').onclick=()=>{
@@ -611,7 +719,7 @@ $('cal-file').onchange=async()=>{const file=$('cal-file').files[0];if(!file)retu
 $('display-mode').onchange=()=>{pointerState=null;renderReadings();};$('force-scale').oninput=renderReadings;
 for(const id of ['pointer-noise','pointer-smoothing'])$(id).oninput=()=>{pointerState=null;renderReadings();};
 $('support').textContent=[!navigator.serial?'Web Serial unavailable.':'',!navigator.bluetooth?'Web Bluetooth unavailable.':'','For hardware, use a supported desktop browser on localhost or HTTPS.'].filter(Boolean).join(' ');
-window.addEventListener('beforeunload',e=>{if(recording||session?.rows.length){e.preventDefault();e.returnValue='';}});
-setInterval(()=>{controls();if(fresh())renderReadings();else if(latest){pointerState=null;$('rate').innerHTML='— <em>Hz</em>';$('cal-live').textContent='—';$('total').innerHTML='— <em>N</em>';$('cop-marker').style.opacity=0;for(let i=0;i<16;i++){$(`zone-${i}`).style.fill='#d1d5db';$(`heat-${i}`).style.opacity=0;}renderReadings();$('cop-status').textContent='CoP unavailable: the stream is stale.';status('No fresh Raw12 data. Check the firmware and connection.');}if(session)$('record-status').textContent=`${recording?'● Recording · ':''}${session.rows.length.toLocaleString()} samples · ${((session.rows.at(-1)?.timeMs??0)/1000).toFixed(1)} s${session.source==='demo'?' · DEMO':''}`;},150);
+window.addEventListener('beforeunload',e=>{if(recording||diskStarting||diskFinishing||session?.rows.length||disk?.pendingCount()){e.preventDefault();e.returnValue='';}});
+setInterval(()=>{controls();if(disk&&recording&&!disk.error)$('disk-status').textContent=`Recording to ${session.folder} · ${disk.saved.toLocaleString()} samples saved · ${disk.pendingCount().toLocaleString()} pending. Keep this tab open.`;if(fresh())renderReadings();else if(latest){pointerState=null;$('rate').innerHTML='— <em>Hz</em>';$('cal-live').textContent='—';$('total').innerHTML='— <em>N</em>';$('cop-marker').style.opacity=0;for(let i=0;i<16;i++){$(`zone-${i}`).style.fill='#d1d5db';$(`heat-${i}`).style.opacity=0;}renderReadings();$('cop-status').textContent='CoP unavailable: the stream is stale.';status('No fresh Raw12 data. Check the firmware and connection.');}if(session)$('record-status').textContent=`${recording?'● Recording · ':''}${session.sampleCount.toLocaleString()} samples · ${((session.lastTimeMs??0)/1000).toFixed(1)} s${session.source==='demo'?' · DEMO':''}`;},150);
 renderCalibration();renderReadings();controls();
 </script></body></html>
