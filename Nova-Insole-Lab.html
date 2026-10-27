@@ -619,7 +619,12 @@ function forceFor(channel,adc,cal=calibration){
   if(adc>=4095)return {n:null,status:'adc_rail'};
   const p=cal.channels[channel];
   if(p.length<3)return {n:null,status:'uncalibrated'};
-  if(adc<p[0].adc||adc>p.at(-1).adc)return {n:null,status:'outside_range'};
+  if(adc>p.at(-1).adc)return {n:null,status:'outside_range'};
+  // A captured unloaded mean can be fractional while later integer readings are zero.
+  // Treat only the measured zero-noise band as unloaded; retain all loaded range checks.
+  const zeroSD=Number.isFinite(p[0].sd)&&p[0].sd>0?p[0].sd:0;
+  if(Math.abs(adc-p[0].adc)<=3*zeroSD)return {n:0,status:'valid'};
+  if(adc<p[0].adc)return {n:null,status:'outside_range'};
   for(let j=1;j<p.length;j++)if(adc<=p[j].adc){const a=p[j-1],b=p[j];return {n:a.n+(adc-a.adc)*(b.n-a.n)/(b.adc-a.adc),status:'valid'};}
   return {n:null,status:'outside_range'};
 }
