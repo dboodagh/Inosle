@@ -1,0 +1,540 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#123e39"><meta name="description" content="NOVA FSR Sensor Lab: live ADC and force measurements, individual sample calibration and CSV acquisition with a Seeed XIAO nRF52840."><title>NOVA · FSR Sensor Lab</title><style>:root{--ink:#193b31;--muted:#6a7e73;--line:#dce5dc;--paper:#f3f6ef;--white:#fff;--accent:#16745d;--plot:#277790;--force:#15715c;--radius:17px}*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input,select{font:inherit}button,a{touch-action:manipulation}button{border:1px solid transparent;border-radius:9px;background:var(--accent);color:#fff;padding:10px 15px;font-size:12px;font-weight:650;cursor:pointer;transition:background .15s}button:hover{background:#105a48}button.secondary{background:#fff;border-color:var(--line);color:var(--ink)}button.secondary:hover{background:#eff5ef}button:disabled{opacity:.4;cursor:not-allowed}button.text-button{border:0;background:transparent;color:var(--muted);padding:5px 0;font-size:11px}button:focus-visible,input:focus-visible,select:focus-visible,a:focus-visible{outline:3px solid #8ccdb4;outline-offset:3px}a{color:var(--accent)}header{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:19px 4%;background:#fff;border-bottom:1px solid var(--line)}.brand{display:flex;align-items:center;gap:12px;text-decoration:none;color:var(--ink);letter-spacing:2px;font-weight:750}.brand-mark{width:43px;height:43px;background:#163f35;color:#fff;border-radius:12px;text-align:center;font:italic 34px Georgia;line-height:39px}.brand b{font-weight:400;color:var(--muted);font-size:12px}.brand small{display:block;font-size:10px;letter-spacing:.3px;font-weight:400;color:var(--muted);margin-top:2px}.header-right{display:flex;align-items:center;gap:20px}.build{font-size:9px;letter-spacing:1px;color:var(--muted)}.pill{display:inline-block;padding:5px 10px;background:#eaf3e9;color:var(--accent);font-size:10px;border-radius:20px;white-space:nowrap}main{max-width:1470px;margin:auto;padding:30px 4% 25px}.intro{display:flex;align-items:center;justify-content:space-between;gap:24px;margin-bottom:23px}.eyebrow{font-size:9px;letter-spacing:1.7px;font-weight:750;color:var(--accent);margin:0 0 7px}h1{font-size:36px;line-height:1.14;letter-spacing:-1.2px;margin:0 0 8px}h2{font-size:18px;line-height:1.3;letter-spacing:-.35px;margin:0 0 9px}p{margin:8px 0}.intro>div>p:last-child{color:var(--muted);margin:0}.card{background:var(--white);border:1px solid var(--line);border-radius:var(--radius);padding:22px;min-width:0}.connection{margin-bottom:20px;padding:15px 20px}.connection-buttons{display:flex;gap:8px;flex-wrap:wrap}#status{font-size:12px;margin:12px 0 2px;overflow-wrap:anywhere}.connection-bottom{display:flex;justify-content:space-between;align-items:start;gap:20px;color:var(--muted);font-size:10px}.connection-bottom span{max-width:86%}.metrics{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line);background:#fff;border-radius:var(--radius);margin-bottom:22px;overflow:hidden}.metrics>div{padding:18px 22px;border-right:1px solid var(--line);min-width:0}.metrics>div:last-child{border:0}.metrics small{display:block;font-size:9px;letter-spacing:1.3px;color:var(--muted)}.metrics strong{display:block;font-size:31px;font-weight:600;letter-spacing:-.7px;margin-top:5px;line-height:1.4;font-variant-numeric:tabular-nums}.metrics em{font-size:13px;font-style:normal;font-weight:400;letter-spacing:0;color:var(--muted)}.metrics>div>span{display:block;font-size:10px;color:var(--muted);min-height:15px;overflow-wrap:anywhere}.workbench{display:grid;grid-template-columns:minmax(0,1fr)340px;gap:22px;align-items:start}.plot-card{grid-column:1;grid-row:1 / span 2}.sensor-card{grid-column:2;grid-row:1;position:relative;min-height:202px;padding-bottom:49px}.calibration-card{grid-column:2;grid-row:2 / span 2}.record-card{grid-column:1;grid-row:3}.wiring-card{grid-column:1;grid-row:4}.section-heading{display:flex;justify-content:space-between;align-items:start;gap:15px}.plot-controls{display:flex;gap:10px}.plot-controls label{margin:0;min-width:100px}.chart-panel{margin-top:17px;border-top:1px solid #eaf0e7;padding-top:13px}.chart-label{display:flex;justify-content:space-between;gap:14px;font-size:11px;margin:0 0 8px}.chart-label>span{font-weight:650}.chart-label small{font-size:9px;color:var(--muted)}.dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:7px}.adc-dot{background:var(--plot)}.force-dot{background:var(--force)}canvas{display:block;width:100%;height:235px}.cal-chart{height:135px;border-top:1px solid var(--line);margin:12px 0}.muted{color:var(--muted)}.small{font-size:11px}.sensor-copy{max-width:48%;position:relative;z-index:1}.sensor-card h2{font-size:16px;overflow-wrap:anywhere}.sensor-copy p{margin:7px 0}.sensor-card>svg{position:absolute;right:14px;top:12px;height:155px;width:145px}#sensor-fill{transition:fill .12s linear}.legend{position:absolute;bottom:28px;left:22px;right:22px;display:flex;align-items:center;gap:10px;font-size:9px;color:var(--muted)}.gradient{height:6px;flex:1;border-radius:8px;background:linear-gradient(90deg,hsl(120,75%,43%),hsl(60,85%,49%),hsl(0,80%,50%))}.sensor-caption{position:absolute;bottom:7px;left:22px;margin:0;font-size:9px}label{display:block;color:var(--muted);font-size:10px;font-weight:600;margin:10px 0}input,select{display:block;width:100%;background:#fcfdfb;color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:9px 10px;margin-top:5px;font-size:12px;min-width:0}label>span{display:block;font-size:9px;font-weight:400;margin-top:3px}.full{width:100%;margin-top:7px}.load-controls{display:grid;grid-template-columns:minmax(0,1fr)75px;gap:9px}.divider-settings{display:grid;grid-template-columns:1.15fr 1fr;gap:10px;border-top:1px solid var(--line);margin-top:12px;padding-top:4px}.points{max-height:180px;overflow:auto;font-size:11px;font-variant-numeric:tabular-nums}.point{display:flex;justify-content:space-between;align-items:center;gap:12px;border-bottom:1px solid var(--line);padding:7px 0}.point>span small{display:block;font-size:9px;color:var(--muted)}.point button{padding:4px 7px;font-size:10px;background:#f4f6f1;color:var(--muted)}.button-row{display:flex;gap:9px}.button-row>*{flex:1;min-width:0}.recording{background:#a83e34!important}.wiring-image{display:block;width:100%;max-width:440px;height:auto;margin:3px auto}.wiring-card>.full{max-width:310px}.calibration-card>.section-heading h2{font-size:17px}footer{text-align:center;color:var(--muted);font-size:10px;margin-top:28px;line-height:1.9}[hidden]{display:none!important}
+@media(min-width:1200px){.plot-card canvas{height:260px}.plot-card{min-height:700px}}
+@media(max-width:1000px){.workbench{grid-template-columns:minmax(0,1fr)310px;gap:17px}.card{padding:18px}.plot-controls{flex-wrap:wrap;gap:6px}.plot-controls label{min-width:87px}.metrics>div{padding:15px}.chart-label small{max-width:50%;text-align:right}.build{display:none}.plot-card>.section-heading{flex-wrap:wrap}}
+@media(max-width:720px){header{padding:15px 18px}.brand b{font-size:10px}.brand small{font-size:9px}.header-right{gap:5px}.pill{font-size:9px}main{padding:23px 15px}.intro{gap:12px}h1{font-size:29px}.intro>div>p:last-child{font-size:12px}.intro button{max-width:103px;padding:9px 12px}.connection{padding:14px}.connection-buttons button{font-size:11px;padding:10px}.connection-bottom{display:block}.connection-bottom span{display:block;max-width:100%;margin:7px 0}.metrics{grid-template-columns:1fr 1fr;margin-bottom:17px}.metrics>div{border-bottom:1px solid var(--line);padding:13px 16px}.metrics strong{font-size:29px}.metrics>div:nth-child(2){border-right:0}.metrics>div:nth-child(n+3){border-bottom:0}.workbench{display:flex;flex-direction:column;gap:16px}.workbench>.card{width:100%}.sensor-card{order:0;min-height:185px}.plot-card{order:1}.calibration-card{order:2}.record-card{order:3}.wiring-card{order:4}.sensor-card>svg{height:145px;top:4px;right:24px}.sensor-copy{max-width:55%}.plot-card>.section-heading{display:block}.plot-controls{margin:12px 0 3px}.plot-controls label{flex:1}.chart-label{font-size:10px}canvas{height:210px}.cal-chart{height:145px}.section-heading h2{font-size:17px}.points{max-height:220px}}
+</style></head>
+<body>
+<header><a class="brand" href="#"><span class="brand-mark">n</span><span>NOVA <b>/ FSR LAB</b><small>Single-sensor characterization</small></span></a><div class="header-right"><span class="build">A0 · RAW12 · USB v5</span><span id="connection-pill" class="pill">Offline</span></div></header>
+<main>
+ <div class="intro"><div><p class="eyebrow">YOUR MATERIAL. ITS RESPONSE.</p><h1>FSR Sensor Lab</h1><p>Watch the signal. Calibrate the force. Capture the test.</p></div><button id="demo" class="secondary">Explore demo</button></div>
+ <section class="connection card" aria-label="Device connection"><div class="connection-buttons"><button id="usb">Connect USB</button><button id="ble" class="secondary">Connect Bluetooth</button><button id="disconnect" class="secondary" disabled>Disconnect</button></div><p id="status" role="status" aria-live="polite">Connect your XIAO with the NovaFSRRaw12 sketch, or explore the demo.</p><div class="connection-bottom"><span id="support"></span><button id="diagnostics" class="text-button">USB diagnostics</button></div></section>
+ <section class="metrics" aria-label="Live readings">
+  <div><small>RAW ADC</small><strong id="adc">—</strong><span>12-bit · 0–4095 counts</span></div>
+  <div><small>CALIBRATED FORCE</small><strong id="force">— <em>N</em></strong><span id="force-status">Choose a sample to calibrate</span></div>
+  <div><small>SENSOR RESISTANCE</small><strong id="resistance">—</strong><span id="voltage">Divider estimate · voltage —</span></div>
+  <div><small>RECEIVED RATE</small><strong id="rate">— <em>Hz</em></strong><span id="missing">0 missing samples</span></div>
+ </section>
+ <div class="workbench">
+  <section class="card plot-card"><div class="section-heading"><div><p class="eyebrow">01 / LIVE RESPONSE</p><h2>Follow the load</h2></div><div class="plot-controls"><label>Window<select id="window"><option value="5">5 seconds</option><option value="10" selected>10 seconds</option><option value="30">30 seconds</option><option value="60">60 seconds</option></select></label><label>View<select id="plot-mode"><option value="both">ADC + force</option><option value="adc">ADC</option><option value="force">Force</option></select></label></div></div>
+   <div id="adc-panel" class="chart-panel"><div class="chart-label"><span><i class="dot adc-dot"></i>Raw ADC</span><small>Acquisition time · seconds</small></div><canvas id="adc-chart" aria-label="Live ADC counts versus acquisition time" role="img"></canvas></div>
+   <div id="force-panel" class="chart-panel"><div class="chart-label"><span><i class="dot force-dot"></i>Estimated force · N</span><small>Within the sample's measured calibration range</small></div><canvas id="force-chart" aria-label="Live calibrated force in newtons versus acquisition time" role="img"></canvas></div>
+   <p id="plot-note" class="muted small">Connect a sensor to start the live plots. The demo shows a synthetic ADC signal.</p>
+  </section>
+  <section class="card sensor-card"><div class="sensor-copy"><p class="eyebrow">SENSING AREA</p><h2 id="visual-name">Sample 1</h2><p id="visual-state" class="muted small">Waiting for a fresh reading</p></div>
+   <svg id="sensor-image" viewBox="0 0 190 205" role="img" aria-label="FSR sensor indicator; colour follows raw ADC">
+    <path d="M73 119 L73 184 Q73 194 83 194 L107 194 Q117 194 117 184 L117 119" fill="#e1e6df" stroke="#a6b7ab" stroke-width="2"/>
+    <path d="M87 123 L87 187 M103 123 L103 187" stroke="#9aa7a3" stroke-width="5"/>
+    <circle cx="95" cy="79" r="70" fill="#eef2ea" stroke="#c8d3c7" stroke-width="2"/>
+    <circle id="sensor-fill" cx="95" cy="79" r="58" fill="#d5ded8"/>
+    <g stroke="#fff" opacity=".65" stroke-width="2.1"><path d="M61 40 H128 M54 48 H134 M49 56 H140 M46 64 H143 M44 72 H145 M44 80 H145 M45 88 H144 M47 96 H141 M51 104 H137 M58 112 H130 M66 120 H120"/></g>
+    <circle cx="95" cy="79" r="26" fill="#fff" opacity=".94"/><text id="sensor-value" x="95" y="80" text-anchor="middle" dominant-baseline="middle" fill="#173b35" font-size="18" font-weight="700">—</text><text x="95" y="95" text-anchor="middle" fill="#687d75" font-size="8">ADC</text>
+   </svg><div class="legend"><span>0</span><div class="gradient"></div><span>4095</span></div><p class="small muted sensor-caption">Green → yellow → red follows raw ADC.</p>
+  </section>
+  <section class="card calibration-card"><p class="eyebrow">02 / SAMPLE & CALIBRATION</p><div class="section-heading"><h2>One curve per sample</h2><button id="add-profile" class="text-button">+ Sample</button></div>
+   <label>Sample profile<select id="profile"></select></label><label>Sample name<input id="profile-name" maxlength="80" value="Sample 1"></label><p class="muted small">Test one FSR at a time on A0. Select its profile when you swap samples.</p>
+   <div class="divider-settings"><label>Pull-down resistor<input id="divider" type="number" min="100" max="1000000" step="100" value="10000"><span>Ω · enter the actual installed value</span></label><label>Supply estimate<input id="vdd" type="number" min="2" max="3.6" step="0.01" value="3.3"><span>V · for voltage display</span></label></div>
+   <button id="zero" class="secondary full" disabled>Capture unloaded · 0 N</button><div class="load-controls"><label>Measured reference load<input id="load" type="number" min="0" step="any" placeholder="e.g. 0.5"></label><label>Unit<select id="unit"><option value="kg">kg</option><option value="g">g</option><option value="N">N</option></select></label></div><button id="capture" class="full" disabled>Capture loaded point</button>
+   <p id="cal-message" role="status" class="small muted">Start with 0 N, then capture at least two different measured loads. Hold each load steady for one second.</p><div id="points" class="points"></div><canvas id="cal-chart" class="cal-chart" aria-label="Applied force versus mean ADC calibration anchors" role="img"></canvas>
+   <div class="button-row"><button id="export-profiles" class="secondary">Export profiles</button><button id="import-profiles" class="secondary">Import profiles</button></div><button id="clear-profile" class="text-button">Clear this calibration</button><input id="profile-file" type="file" accept=".json,application/json" hidden>
+  </section>
+  <section class="card record-card"><p class="eyebrow">03 / RECORD A TEST</p><div class="section-heading"><div><h2>Keep the whole signal</h2><p class="muted small">Raw ADC, force validity, electrical estimates and board timestamps.</p></div><span id="record-badge" class="pill">Ready</span></div><label>Test name<input id="test-name" maxlength="80" value="FSR loading test"></label><div class="button-row"><button id="record" disabled>Start recording</button><button id="record-disk" class="secondary" disabled>Record to disk</button></div><p id="record-status" role="status" class="small muted">No recording yet.</p><div class="button-row"><button id="csv" class="secondary" disabled>Export CSV</button><button id="session-json" class="secondary" disabled>Session JSON</button></div><p id="disk-status" class="small muted" role="status"></p><p class="small muted">Standard recording holds up to 100,000 samples (about 8 min 20 s at 200 Hz). Export before closing. Desktop folder recording saves CSV segments as you go.</p></section>
+  <section class="card wiring-card"><p class="eyebrow">04 / THE BENCH SETUP</p><h2>A simple voltage divider</h2>
+   <svg viewBox="0 0 430 160" role="img" aria-label="Wire 3.3 volts through the FSR to A0; connect a pull-down resistor from A0 to ground" class="wiring-image"><g stroke="#536f63" stroke-width="2.3" fill="none"><path d="M25 68 H69 M139 68 H214 M214 68 H265 M345 68 H403 M214 68 V122"/><rect x="69" y="48" width="70" height="40" rx="6"/><rect x="265" y="48" width="80" height="40" rx="6"/></g><circle cx="214" cy="68" r="5" fill="#147865"/><g font-family="system-ui" font-size="14" fill="#193b31" text-anchor="middle"><text x="25" y="37">3V3</text><text x="104" y="74">FSR</text><text id="wiring-resistor" x="305" y="74">10 kΩ</text><text x="403" y="37">GND</text><text x="214" y="146">A0</text></g></svg>
+   <p class="small muted">One FSR terminal to <b>3V3</b>. The other goes to <b>A0</b> and one end of the resistor. The resistor's other end goes to <b>GND</b>. Use the board's 3.3 V pin, not 5 V.</p><button id="firmware" class="secondary full">Download XIAO firmware</button><p class="small muted">Arduino board: Seeed XIAO nRF52840 / Sense, Seeed nRF52 (Bluefruit) core. This app uses the dedicated NovaFSRRaw12 sketch.</p>
+  </section>
+ </div>
+ <footer>One input · six saved sample profiles · calibration stays in your browser<br><a href="./Nova-FSR-Lab.html" download="Nova-FSR-Lab.html">Download standalone web app</a></footer>
+</main>
+<script>'use strict';
+const FSR_PROTOCOL='nova-fsr-raw12-v1';
+const PROFILE_SCHEMA='nova-fsr-profiles-v1';
+const FSR_SERVICE='7a0f0000-9c7d-4f46-a093-e23f2b49c001';
+const FSR_CHARACTERISTIC='7a0f0001-9c7d-4f46-a093-e23f2b49c001';
+class FsrDecoder {
+  constructor(onFrame,onReset=()=>{}){this.onFrame=onFrame;this.onReset=onReset;this.reset();}
+  reset(){this.buffer=new Uint8Array();this.last=null;this.elapsedUs=0;}
+  static crc16(bytes){let crc=0xffff;for(const b of bytes){crc^=b<<8;for(let i=0;i<8;i++)crc=((crc&0x8000)?(crc<<1)^0x1021:crc<<1)&0xffff;}return crc;}
+  push(input){
+    const bytes=input instanceof ArrayBuffer?new Uint8Array(input):new Uint8Array(input.buffer,input.byteOffset,input.byteLength);
+    const data=new Uint8Array(this.buffer.length+bytes.length);data.set(this.buffer);data.set(bytes,this.buffer.length);let offset=0;
+    while(data.length-offset>=20){
+      const p=data.subarray(offset,offset+20),v=new DataView(p.buffer,p.byteOffset,20);
+      if(p[0]!==0xf5||p[1]!==1||FsrDecoder.crc16(p.subarray(0,18))!==v.getUint16(18,true)||p.subarray(10,18).some(b=>b!==0)){offset++;continue;}
+      offset+=20;const sequence=v.getUint16(2,true),timestampUs=v.getUint32(4,true),adc=v.getUint16(8,true);if(adc>4095)continue;
+      let missedFrames=0;
+      if(this.last){
+        const ds=(sequence-this.last.sequence+65536)%65536,dt=(timestampUs-this.last.timestampUs)>>>0;
+        if(ds===0)continue;
+        if(dt>=0x80000000){this.reset();this.onReset('The board restarted. Start a new recording for the new acquisition.');this.last={sequence,timestampUs};continue;}
+        if(ds>=32768)continue;
+        missedFrames=ds-1;this.elapsedUs+=dt;
+      }
+      this.last={sequence,timestampUs};this.onFrame({sequence,timestampUs,timeMs:this.elapsedUs/1000,missedFrames,adc});
+    }
+    this.buffer=data.slice(offset);
+  }
+}
+function newProfile(name){return {id:crypto.randomUUID(),name,calibrationId:crypto.randomUUID(),dividerOhm:null,points:[]};}
+function validateProfiles(obj){
+  if(obj?.schema!==PROFILE_SCHEMA||!Array.isArray(obj.profiles)||obj.profiles.length<1||obj.profiles.length>32)throw Error('Choose a NOVA FSR profiles JSON file.');
+  const ids=new Set();
+  for(const p of obj.profiles){
+    if(typeof p.id!=='string'||!p.id||p.id.length>100||ids.has(p.id)||typeof p.calibrationId!=='string'||!p.calibrationId||p.calibrationId.length>100||typeof p.name!=='string'||p.name.length>80||!Array.isArray(p.points)||p.points.length>100)throw Error('Invalid sample profile.');
+    ids.add(p.id);
+    if(p.points.length&&(!Number.isFinite(p.dividerOhm)||p.dividerOhm<100||p.dividerOhm>1e6))throw Error('Invalid calibration divider value.');
+    let previous=null;
+    for(const q of p.points){
+      if(!Number.isFinite(q.adc)||q.adc<0||q.adc>=4095||!Number.isFinite(q.n)||q.n<0||!Number.isFinite(q.sd)||q.sd<0)throw Error('Invalid calibration point.');
+      if(previous&&(q.adc<=previous.adc||q.n<=previous.n))throw Error('Both ADC and force must increase between points.');previous=q;
+    }
+    if(p.points.length&&p.points[0].n!==0)throw Error('Capture the unloaded 0 N point first.');
+  }
+  return obj;
+}
+function forceAt(p,adc,dividerOhm){
+  if(adc>=4095)return {n:null,status:'adc_rail'};
+  if(p.points.length&&p.dividerOhm!==dividerOhm)return {n:null,status:'divider_changed'};
+  const a=p.points;if(a.length<3)return {n:null,status:'uncalibrated'};
+  if(adc>a.at(-1).adc)return {n:null,status:'outside_range'};
+  if(Math.abs(adc-a[0].adc)<=3*a[0].sd)return {n:0,status:'valid'};
+  if(adc<a[0].adc)return {n:null,status:'outside_range'};
+  for(let i=1;i<a.length;i++)if(adc<=a[i].adc){const x=a[i-1],y=a[i];return {n:x.n+(adc-x.adc)*(y.n-x.n)/(y.adc-x.adc),status:'valid'};}
+  return {n:null,status:'outside_range'};
+}
+function electricalAt(adc,settings){return {voltage:adc/4095*settings.vdd,resistance:adc===0?null:settings.dividerOhm*(4095/adc-1),resistanceStatus:adc===0?'high_or_open':adc===4095?'at_adc_rail':'estimated'};}
+const CSV_HEADER='Time_ms,Sequence,BoardMicros,MissedFrames,Source,SampleID,SampleName,CalibrationID,ADC,VoltageEstimate_V,ResistanceEstimate_Ohm,ResistanceStatus,Force_N,ForceStatus,Divider_Ohm,ConfiguredVDD_V';
+function csvText(value){const text=String(value);return '"'+(/^[\s]*[=+\-@]/.test(text)?"'":'')+text.replaceAll('"','""')+'"';}
+function csvRow(row,s){
+  const e=electricalAt(row.adc,s.settings);
+  return [row.timeMs.toFixed(3),row.sequence,row.timestampUs,row.missedFrames,csvText(s.source),csvText(s.profile.id),csvText(s.profile.name),csvText(s.profile.calibrationId),row.adc,e.voltage.toFixed(6),e.resistance===null?'':e.resistance.toFixed(3),csvText(e.resistanceStatus),row.force.n===null?'':row.force.n.toFixed(6),csvText(row.force.status),s.settings.dividerOhm,s.settings.vdd].join(',');
+}
+</script><script>// Read-only adapter for dedicated TinyUSB WebUSB, with legacy CDC ACM fallback.
+// Used on Android even when Web Serial exists, and elsewhere when Web Serial is unavailable.
+// CDC requests: SET_LINE_CODING (0x20), SET_CONTROL_LINE_STATE (0x22).
+class FsrUsbPort {
+  constructor(device,{readTimeoutMs=3000,operationTimeoutMs=4000,closeTimeoutMs=2000,onEvent=()=>{}}={}) {
+    this.device=device;this.readable=null;this.running=false;this.closing=null;
+    this.readTimeoutMs=readTimeoutMs;this.operationTimeoutMs=operationTimeoutMs;this.closeTimeoutMs=closeTimeoutMs;this.onEvent=onEvent;
+    this.selected=null;this.abortError=null;
+  }
+  async timed(promise,phase,ms=this.operationTimeoutMs) {
+    let timer;
+    try{return await Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>{
+      const error=new DOMException(`USB ${phase} timed out.`, 'TimeoutError');error.usbPhase=phase;reject(error);
+    },ms);})]);}finally{clearTimeout(timer);}
+  }
+  static async requestPort() {
+    // Show all browser-accessible devices: firmware/core builds can use different USB IDs.
+    const device=await navigator.usb.requestDevice({filters:[]});
+    return new FsrUsbPort(device);
+  }
+  findInterfaces() {
+    // Dedicated TinyUSB WebUSB interface takes precedence; do not claim CDC.
+    for(const configuration of this.device.configurations){
+      for(const data of configuration.interfaces){
+        const dataAlt=data.alternates.find(a=>a.interfaceClass===255&&a.endpoints.some(e=>e.type==='bulk'&&e.direction==='in')&&a.endpoints.some(e=>e.type==='bulk'&&e.direction==='out'));
+        if(dataAlt)return {kind:'webusb',configuration,data,dataAlt,endpoint:dataAlt.endpoints.find(e=>e.type==='bulk'&&e.direction==='in')};
+      }
+    }
+    for(const configuration of this.device.configurations){
+      for(const control of configuration.interfaces){
+        const controlAlt=control.alternates.find(a=>a.interfaceClass===2&&a.interfaceSubclass===2);
+        if(!controlAlt)continue;
+        // The XIAO TinyUSB CDC function pairs adjacent control/data interfaces.
+        const data=configuration.interfaces.find(i=>i.interfaceNumber===control.interfaceNumber+1);
+        const dataAlt=data?.alternates.find(a=>a.interfaceClass===10&&a.endpoints.some(e=>e.type==='bulk'&&e.direction==='in'));
+        if(dataAlt){return {kind:'cdc',configuration,control,controlAlt,data,dataAlt,
+          endpoint:dataAlt.endpoints.find(e=>e.type==='bulk'&&e.direction==='in')};}
+      }
+    }
+    throw new Error('No compatible USB interface. Upload NovaFSRRaw12 and start the normal sketch.');
+  }
+  async open({baudRate=115200}={}) {
+    if(this.device.opened)throw new Error('USB is still open. Unplug the insole once before reconnecting.');
+    try{
+      this.closing=null;this.abortError=null;this.openFailed=false;
+      const selected=this.selected=this.findInterfaces();
+      this.onEvent('interface',{kind:selected.kind,interface:selected.data.interfaceNumber,endpoint:selected.endpoint.endpointNumber});
+      const opening=this.device.open();
+      // If the OS finishes opening after the timeout, release that late handle too.
+      opening.then(()=>{if(this.openFailed&&this.device.opened)return this.device.close();}).catch(()=>{});
+      await this.timed(opening,'open');
+      if(this.device.configuration?.configurationValue!==selected.configuration.configurationValue)
+        await this.timed(this.device.selectConfiguration(selected.configuration.configurationValue),'configuration');
+      if(selected.kind==='cdc')await this.timed(this.device.claimInterface(selected.control.interfaceNumber),'control interface');
+      await this.timed(this.device.claimInterface(selected.data.interfaceNumber),'data interface');
+      if(selected.kind==='cdc'&&selected.control.alternate?.alternateSetting!==selected.controlAlt.alternateSetting)
+        await this.timed(this.device.selectAlternateInterface(selected.control.interfaceNumber,selected.controlAlt.alternateSetting),'control alternate');
+      if(selected.data.alternate?.alternateSetting!==selected.dataAlt.alternateSetting)
+        await this.timed(this.device.selectAlternateInterface(selected.data.interfaceNumber,selected.dataAlt.alternateSetting),'data alternate');
+      const line=new Uint8Array(7);new DataView(line.buffer).setUint32(0,baudRate,true);line[6]=8;
+      const setup={requestType:'class',recipient:'interface',index:selected.kind==='cdc'?selected.control.interfaceNumber:selected.data.interfaceNumber};
+      const requests=selected.kind==='cdc'?[[0x20,0,line],[0x22,1,new Uint8Array()]]:[[0x22,1,new Uint8Array()]];
+      for(const [request,value,payload] of requests){
+        const result=await this.timed(this.device.controlTransferOut({...setup,request,value},payload),'line state');
+        if(result.status!=='ok')throw new Error(`USB serial setup failed (${result.status}).`);
+      }
+      // Small multi-packet reads reduce Android USB bridge round trips. Short packets
+      // still complete a read promptly; the decoder accepts arbitrary chunk boundaries.
+      const readSize=selected.endpoint.packetSize*8;
+      let stalls=0;
+      this.running=true;
+      this.readable=new ReadableStream({
+        start:controller=>{this.controller=controller;},
+        pull:async controller=>{
+          const readStarted=Date.now();
+          try{
+            // A ZLP or a cleared STALL produces no stream chunk. Keep reading here:
+            // returning an empty pull at highWaterMark=0 can strand reader.read().
+            while(this.running){
+            const remaining=Math.max(1,this.readTimeoutMs-(Date.now()-readStarted));
+            const result=await this.timed(this.device.transferIn(selected.endpoint.endpointNumber,readSize),'read',remaining);
+            if(!this.running)return;
+            if(result.status==='stall'&&stalls++<2){
+              this.onEvent('endpoint-stall',{attempt:stalls});
+              await this.timed(this.device.clearHalt('in',selected.endpoint.endpointNumber),'clear halt');
+              continue;
+            }
+            if(result.status!=='ok')throw new Error(`USB read failed (${result.status}).`);
+            if(result.data?.byteLength){
+              stalls=0;
+              controller.enqueue(new Uint8Array(result.data.buffer,result.data.byteOffset,result.data.byteLength).slice());
+              return;
+            }else{
+              if(Date.now()-readStarted>=this.readTimeoutMs)throw new Error('USB repeatedly returned empty data.');
+              // Yield on zero-length completions; avoid a microtask spin on Android.
+              await new Promise(resolve=>setTimeout(resolve,5));
+            }
+            }
+          }catch(error){if(this.running){this.running=false;this.onEvent('read-error',{name:error.name,message:error.message});controller.error(this.abortError||error);}}
+        },
+        // Closing the USB device cancels an outstanding transferIn, including at idle.
+        cancel:()=>this.close(),
+      },{highWaterMark:0});
+    }catch(error){this.openFailed=true;this.onEvent('setup-error',{name:error.name,message:error.message});await this.close().catch(()=>{});throw error;}
+  }
+  abort(error){this.abortError=error;this.running=false;try{this.controller?.error(error);}catch{}return this.close();}
+  async close() {
+    this.running=false;
+    if(!this.closing)this.closing=(async()=>{if(this.device.opened)await this.device.close();})();
+    // A timed-out transferIn must be cancelled by close before another read/open.
+    // Promise.race alone does not cancel a USB transfer.
+    await this.timed(this.closing,'close',this.closeTimeoutMs);
+  }
+}
+</script><script>// Bounded buffering: close each CSV segment so completed data survives tab loss.
+class DiskRecorder {
+  constructor(directory, metadata, header, onError) {
+    this.directory=directory; this.metadata=metadata; this.header=header; this.onError=onError;
+    this.buffer=[]; this.queue=[]; this.parts=[]; this.nextPart=1; this.work=null;
+    this.error=null; this.closed=false; this.total=0; this.saved=0;
+  }
+  async writeFile(name, text) {
+    const handle=await this.directory.getFileHandle(name,{create:true});
+    const stream=await handle.createWritable();
+    try { await stream.write(text); await stream.close(); }
+    catch(error) { try { await stream.abort(); } catch {} throw error; }
+  }
+  async writeMetadata(state) {
+    await this.writeFile('session.json',JSON.stringify({...this.metadata,state,
+      samplesReceived:this.total,samplesSaved:this.saved,segments:this.parts,
+      stoppedUTC:this.closed?new Date().toISOString():null},null,2));
+  }
+  async initialize() { await this.writeMetadata('recording'); }
+  append(line) {
+    if(this.error||this.closed)return;
+    this.buffer.push(line);this.total++;
+    if(this.buffer.length>=6000)this.flush();
+  }
+  fail(error) {
+    if(this.error)return;
+    this.error=error;
+    queueMicrotask(()=>this.onError(error));
+  }
+  flush() {
+    if(this.error||!this.buffer.length)return;
+    if(this.queue.length>=2){this.fail(new Error('Disk cannot keep up. Recording stopped; download pending data.'));return;}
+    this.queue.push({name:`part-${String(this.nextPart++).padStart(5,'0')}.csv`,lines:this.buffer});
+    this.buffer=[];
+    if(!this.work)this.work=this.drain().finally(()=>{this.work=null;});
+  }
+  async drain() {
+    try {
+      while(this.queue.length&&!this.error) {
+        const part=this.queue[0];
+        await this.writeFile(part.name,this.header+'\n'+part.lines.join('\n')+'\n');
+        this.saved+=part.lines.length;
+        this.parts.push({file:part.name,samples:part.lines.length});
+        this.queue.shift();
+        await this.writeMetadata('recording');
+      }
+    } catch(error) { this.fail(error); }
+  }
+  async finish() {
+    this.closed=true;this.flush();
+    if(this.work)await this.work;
+    if(!this.error)try{await this.writeMetadata('complete');}catch(error){this.fail(error);}
+  }
+  pendingCount() { return this.queue.reduce((n,p)=>n+p.lines.length,0)+this.buffer.length; }
+  recoveryCSV() {
+    const lines=[...this.queue.flatMap(p=>p.lines),...this.buffer];
+    return lines.length?this.header+'\n'+lines.join('\n')+'\n':null;
+  }
+}
+</script><script>const FIRMWARE_SOURCE="#include <bluefruit.h>\n#include <Adafruit_TinyUSB.h>\n\n// Seeed nRF52 / Bluefruit core. XIAO nRF52840 or nRF52840 Sense.\n// 3V3 -> FSR -> A0 junction -> 10 kOhm resistor -> GND.\n// Send raw readings; calibration to newtons belongs to the browser profile.\nconstexpr uint8_t FSR_PIN = A0;\nconstexpr uint32_t SAMPLE_PERIOD_US = 5000; // 200 Hz target, one ADC sample per frame.\nconstexpr uint8_t AVERAGES = 4;\nconst uint8_t SERVICE_UUID[] = {0x01,0xc0,0x49,0x2b,0x3f,0xe2,0x93,0xa0,0x46,0x4f,0x7d,0x9c,0x00,0x00,0x0f,0x7a};\nconst uint8_t DATA_UUID[] = {0x01,0xc0,0x49,0x2b,0x3f,0xe2,0x93,0xa0,0x46,0x4f,0x7d,0x9c,0x01,0x00,0x0f,0x7a};\nBLEService fsrService(SERVICE_UUID);\nBLECharacteristic fsrData(DATA_UUID);\nAdafruit_USBD_WebUSB usbWeb;\nWEBUSB_URL_DEF(fsrLandingPage, 1, \"dboodagh.github.io/Inosle/Nova-FSR-Lab.html\");\nbool webReady = false;\nuint16_t sequence = 0;\nuint32_t nextSample = 0;\n\nuint16_t crc16(const uint8_t* p, size_t n) {\n  uint16_t crc=0xffff;\n  while(n--){crc^=uint16_t(*p++)<<8;for(uint8_t i=0;i<8;i++)crc=(crc&0x8000)?(crc<<1)^0x1021:crc<<1;}\n  return crc;\n}\nvoid put16(uint8_t* p,uint16_t v){p[0]=v;p[1]=v>>8;}\nvoid put32(uint8_t* p,uint32_t v){for(uint8_t i=0;i<4;i++)p[i]=v>>(8*i);}\n\nvoid setup() {\n  usbWeb.setLandingPage(&fsrLandingPage);\n  webReady=usbWeb.begin();\n  Serial.begin(115200);\n  pinMode(FSR_PIN,INPUT);\n  analogReadResolution(12);\n  analogReference(AR_VDD4); // Effective full scale 0..VDD, as in the insole Raw12 setup.\n  analogSampleTime(10);\n  Bluefruit.configPrphConn(23,6,8,1);\n  Bluefruit.begin();Bluefruit.setTxPower(4);Bluefruit.setName(\"NOVA FSR Raw12\");\n  Bluefruit.Periph.setConnInterval(6,12);\n  fsrService.begin();fsrData.setProperties(CHR_PROPS_READ|CHR_PROPS_NOTIFY);\n  fsrData.setPermission(SECMODE_OPEN,SECMODE_NO_ACCESS);fsrData.setFixedLen(20);fsrData.begin();\n  Bluefruit.Advertising.addFlags(BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE);\n  Bluefruit.Advertising.addTxPower();Bluefruit.Advertising.addService(fsrService);Bluefruit.ScanResponse.addName();\n  Bluefruit.Advertising.restartOnDisconnect(true);Bluefruit.Advertising.setInterval(32,244);\n  Bluefruit.Advertising.setFastTimeout(30);Bluefruit.Advertising.start(0);\n  nextSample=micros();\n}\nvoid loop() {\n  const uint32_t now=micros();\n  if(int32_t(now-nextSample)<0){yield();return;}\n  const uint32_t skipped=uint32_t(now-nextSample)/SAMPLE_PERIOD_US;\n  sequence+=skipped;nextSample+=(skipped+1)*SAMPLE_PERIOD_US;\n  const uint32_t timestamp=micros();\n  (void)analogRead(FSR_PIN);\n  uint32_t sum=0;for(uint8_t i=0;i<AVERAGES;i++)sum+=analogRead(FSR_PIN);\n  const uint16_t adc=(sum+AVERAGES/2)/AVERAGES;\n  // 20 bytes: F5, version 1, sequence u16 LE, micros u32 LE, ADC u16 LE,\n  // eight reserved zero bytes, CRC16-CCITT-FALSE over bytes 0..17 (u16 LE).\n  uint8_t packet[20]={0};packet[0]=0xf5;packet[1]=1;\n  put16(packet+2,sequence);put32(packet+4,timestamp);put16(packet+8,adc);\n  put16(packet+18,crc16(packet,18));\n  // A whole 20-byte frame fits the installed 64-byte vendor FIFO. Never block.\n  if(Serial&&Serial.availableForWrite()>=20)Serial.write(packet,20);\n  if(webReady&&usbWeb.connected()&&tud_vendor_write_available()>=20)tud_vendor_write(packet,20);\n  if(Bluefruit.connected()&&fsrData.notifyEnabled())fsrData.notify(packet,20);\n  ++sequence;\n}\n";</script><script>'use strict';
+const $=id=>document.getElementById(id);
+const ANDROID=/Android/i.test(navigator.userAgent)||navigator.userAgentData?.platform==='Android';
+const WEBUSB=ANDROID||!navigator.serial;
+const STORAGE='nova-fsr-lab-v1';
+let settings={dividerOhm:10000,vdd:3.3};
+let profiles=Array.from({length:6},(_,i)=>newProfile(`Sample ${i+1}`));
+let selectedId=profiles[0].id;
+const lab={mode:null,busy:false,token:0,latest:null,lastArrival:0,history:[],rates:[],missing:0,port:null,reader:null,readTask:null,bleDevice:null,bleCharacteristic:null,bleHandler:null,bleDisconnect:null,demoTimer:null,capture:null,recording:false,session:null,disk:null,diskStarting:false,finalizing:false,diskTimer:null,wake:null,wakeRequest:null,usbWanted:false,recovering:false,retries:0,reconnectTimer:null,usbStart:0,bytes:0,scans:0,events:[]};
+const currentProfile=()=>profiles.find(p=>p.id===selectedId)||profiles[0];
+const fresh=()=>!!lab.latest&&performance.now()-lab.lastArrival<1500;
+function message(text){$('status').textContent=text;}
+function log(event,detail={}){lab.events.push({utc:new Date().toISOString(),event,...detail});if(lab.events.length>80)lab.events.shift();}
+function validSettings(s){if(!s||!Number.isFinite(s.dividerOhm)||s.dividerOhm<100||s.dividerOhm>1e6||!Number.isFinite(s.vdd)||s.vdd<2||s.vdd>3.6)throw Error('Use a divider value from 100 Ω to 1 MΩ and supply estimate from 2 to 3.6 V.');return s;}
+try{const saved=JSON.parse(localStorage.getItem(STORAGE)||'null');if(saved){validateProfiles(saved);profiles=saved.profiles;settings=validSettings(saved.settings);selectedId=profiles.some(p=>p.id===saved.selectedId)?saved.selectedId:profiles[0].id;}}catch(e){$('cal-message').textContent='Saved profiles could not be restored. Import a profiles JSON backup if needed.';}
+function persist(){try{localStorage.setItem(STORAGE,JSON.stringify({schema:PROFILE_SCHEMA,profiles,settings,selectedId}));}catch(e){$('cal-message').textContent='Browser storage is unavailable. Export your profiles before closing.';}}
+function download(name,text,type){const url=URL.createObjectURL(new Blob([text],{type}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),30000);}
+const filename=ext=>`nova-fsr-${(lab.session?.startedUTC||new Date().toISOString()).replace(/[:.]/g,'-')}.${ext}`;
+async function wakeScreen(){
+  if(!lab.mode||lab.mode==='demo'||document.visibilityState==='hidden'||!navigator.wakeLock||lab.wake||lab.wakeRequest)return;
+  lab.wakeRequest=navigator.wakeLock.request('screen');
+  try{const lock=await lab.wakeRequest;if(!lab.mode){await lock.release();return;}lab.wake=lock;lock.addEventListener('release',()=>{if(lab.wake===lock)lab.wake=null;});}catch(e){log('wake-lock',{message:e.message});}finally{lab.wakeRequest=null;}
+}
+function releaseScreen(){const lock=lab.wake;lab.wake=null;if(lock)lock.release().catch(()=>{});}
+function controls(){
+  const lock=lab.recording||lab.capture||lab.diskStarting||lab.finalizing;
+  $('usb').disabled=lab.busy||lab.recovering||!!lab.mode||!(WEBUSB?navigator.usb:navigator.serial)||!isSecureContext;
+  $('ble').disabled=lab.busy||lab.recovering||!!lab.mode||!navigator.bluetooth||!isSecureContext;
+  $('demo').disabled=lab.busy||lab.recovering||!!lab.mode;
+  $('disconnect').disabled=lab.busy||(!lab.mode&&!lab.recovering);
+  for(const id of ['profile','profile-name','divider','vdd','add-profile','load','unit','clear-profile','import-profiles','test-name'])$(id).disabled=!!lock;
+  $('zero').disabled=$('capture').disabled=!!lock||!fresh()||lab.mode==='demo';
+  for(const b of $('points').querySelectorAll('button'))b.disabled=!!lock;
+  $('record').disabled=!!lab.capture||lab.diskStarting||lab.finalizing||(!lab.recording&&!fresh());
+  $('record').textContent=lab.recording?'Stop recording':'Start recording';$('record').classList.toggle('recording',lab.recording);
+  $('record-disk').hidden=!window.showDirectoryPicker;
+  $('record-disk').disabled=!!lock||!fresh()||!window.showDirectoryPicker;
+  $('csv').disabled=lab.recording||lab.finalizing||!(lab.session?.rows.length||lab.disk?.pendingCount());
+  $('session-json').disabled=lab.recording||lab.finalizing||!lab.session;
+  $('connection-pill').textContent=lab.recovering?'USB · reconnecting':lab.mode==='demo'?'Demo · synthetic':lab.mode?`${lab.mode} · ${fresh()?'streaming':'waiting'}`:'Offline';
+  $('record-badge').textContent=lab.recording?'Recording':lab.finalizing?'Saving…':lab.session?'Stopped':'Ready';
+}
+function clearLive(){lab.latest=null;lab.lastArrival=0;lab.history=[];lab.rates=[];lab.missing=0;decoder.reset();render();}
+function begin(kind){clearLive();lab.mode=kind;message(kind==='demo'?'Demo: synthetic ADC. Calibration is disabled.':`Connected via ${kind}. Waiting for NovaFSRRaw12 data…`);wakeScreen();controls();}
+function finish(reason){
+  if(lab.recording){lab.session.stopReason=reason;stopRecording();}
+  if(lab.capture){lab.capture=null;$('cal-message').textContent='Capture cancelled because acquisition ended.';}
+  lab.mode=null;releaseScreen();clearLive();message(reason);controls();
+}
+function acquisitionReset(reason){
+  log('board-restarted');if(lab.recording){lab.session.stopReason=reason;stopRecording();}
+  lab.capture=null;lab.latest=null;lab.history=[];lab.rates=[];lab.lastArrival=0;lab.missing=0;message(reason);
+}
+const decoder=new FsrDecoder(onFrame,acquisitionReset);
+function onFrame(frame){
+  if(!lab.mode)return;
+  lab.latest=frame;lab.lastArrival=performance.now();lab.history.push(frame);if(lab.history.length>13000)lab.history.splice(0,1000);
+  lab.rates.push(frame);while(lab.rates.length>2&&frame.timeMs-lab.rates[0].timeMs>2000)lab.rates.shift();
+  lab.missing+=frame.missedFrames;lab.scans++;if(lab.scans===1)log('first-frame',{sequence:frame.sequence});
+  if(lab.capture)lab.capture.frames.push(frame);
+  if(lab.recording&&!lab.disk?.error){
+    const s=lab.session;if(s.firstTime===null)s.firstTime=frame.timeMs;
+    const force=s.source==='demo'?{n:null,status:'demo'}:forceAt(s.profile,frame.adc,s.settings.dividerOhm);
+    const row={...frame,timeMs:frame.timeMs-s.firstTime,force};s.sampleCount++;s.lastTimeMs=row.timeMs;
+    if(lab.disk)lab.disk.append(csvRow(row,s));else s.rows.push(row);
+    if(!lab.disk&&s.sampleCount>=100000){s.stopReason='The 100,000-sample memory limit was reached. Export this recording or use desktop disk recording.';stopRecording();}
+  }
+}
+function usbError(e){
+  if(e.name==='NotFoundError'||e.name==='AbortError')return 'No USB device selected. Connect the XIAO and select it in the chooser.';
+  if(e.name==='TimeoutError')return e.usbPhase==='read'?'USB paused for 3 seconds.':`USB ${e.usbPhase||'operation'} timed out. Unplug once and reconnect.`;
+  return 'USB: '+e.message;
+}
+async function openUsb(port,token){
+  if(WEBUSB)port.onEvent=log;
+  await port.open({baudRate:115200});
+  if(token!==lab.token||!lab.usbWanted){await port.close();return;}
+  let reader;try{reader=port.readable.getReader();}catch(e){await port.close().catch(()=>{});throw e;}
+  lab.port=port;lab.reader=reader;lab.recovering=false;lab.usbStart=performance.now();lab.bytes=0;lab.scans=0;
+  log('usb-open',{attempt:lab.retries});begin('USB');lab.readTask=readUsb(port,reader,token);
+}
+function reconnect(port,token,error){
+  const setupTimeout=error?.name==='TimeoutError'&&error.usbPhase!=='read';
+  if(!WEBUSB||!lab.usbWanted||token!==lab.token||lab.retries>=2||port.device.opened||setupTimeout||error?.noRetry||['SecurityError','NotFoundError','NotAllowedError'].includes(error?.name)){
+    if(WEBUSB&&lab.usbWanted&&lab.retries>=2&&!error?.noRetry)message('USB did not resume. Unplug once and reconnect. Download USB diagnostics if it repeats.');lab.usbWanted=false;lab.recovering=false;controls();return;
+  }
+  lab.retries++;lab.recovering=true;controls();message(`USB paused. Reconnecting (${lab.retries}/2)… Recorded samples remain available.`);
+  lab.reconnectTimer=setTimeout(async()=>{
+    lab.reconnectTimer=null;if(token!==lab.token||!lab.usbWanted)return;
+    const next=new FsrUsbPort(port.device);log('usb-reconnect',{attempt:lab.retries});
+    try{await openUsb(next,token);}catch(e){if(token!==lab.token)return;finish(usbError(e));reconnect(next,token,e);}finally{controls();}
+  },500);
+}
+async function readUsb(port,reader,token){
+  let error=null;
+  try{while(token===lab.token){const {value,done}=await reader.read();if(done)break;if(value){lab.bytes+=value.byteLength;decoder.push(value);}}}
+  catch(e){error=port.abortError||e;}
+  finally{
+    reader.releaseLock();try{await port.close();}catch(e){error=e;log('usb-close-error',{message:e.message});}
+    if(token!==lab.token||port!==lab.port)return;
+    lab.reader=null;lab.port=null;log('usb-ended',{message:error?.message,bytes:lab.bytes,frames:lab.scans});
+    finish(usbError(error||new Error('Stream ended.'))+' Recorded samples remain available.');reconnect(port,token,error);
+  }
+}
+$('usb').onclick=async()=>{
+  lab.busy=true;lab.usbWanted=true;lab.retries=0;const token=++lab.token;controls();
+  try{const port=WEBUSB?await FsrUsbPort.requestPort():await navigator.serial.requestPort();await openUsb(port,token);}catch(e){lab.usbWanted=false;lab.port=null;log('usb-error',{name:e.name,message:e.message});finish(usbError(e));}finally{lab.busy=false;controls();}
+};
+function cleanBle(){
+  if(lab.bleCharacteristic&&lab.bleHandler)lab.bleCharacteristic.removeEventListener('characteristicvaluechanged',lab.bleHandler);
+  if(lab.bleDevice&&lab.bleDisconnect)lab.bleDevice.removeEventListener('gattserverdisconnected',lab.bleDisconnect);
+  lab.bleCharacteristic=null;lab.bleHandler=null;lab.bleDisconnect=null;
+}
+$('ble').onclick=async()=>{
+  lab.busy=true;const token=++lab.token;controls();
+  try{
+    const d=await navigator.bluetooth.requestDevice({filters:[{services:[FSR_SERVICE]}]});lab.bleDevice=d;
+    lab.bleDisconnect=()=>{if(token!==lab.token)return;cleanBle();finish('Bluetooth disconnected. Recorded samples remain available.');};
+    d.addEventListener('gattserverdisconnected',lab.bleDisconnect,{once:true});
+    const server=await d.gatt.connect(),service=await server.getPrimaryService(FSR_SERVICE),ch=await service.getCharacteristic(FSR_CHARACTERISTIC);
+    lab.bleCharacteristic=ch;lab.scans=0;begin('BLE');lab.bleHandler=e=>decoder.push(e.target.value);
+    ch.addEventListener('characteristicvaluechanged',lab.bleHandler);await ch.startNotifications();if(!d.gatt.connected)throw Error('Disconnected during setup.');
+  }catch(e){cleanBle();if(lab.bleDevice?.gatt.connected)lab.bleDevice.gatt.disconnect();finish('Bluetooth: '+e.message);}finally{lab.busy=false;controls();}
+};
+async function disconnect(){
+  if(lab.busy)return;lab.busy=true;lab.usbWanted=false;lab.token++;lab.recovering=false;clearTimeout(lab.reconnectTimer);lab.reconnectTimer=null;controls();
+  const reader=lab.reader,task=lab.readTask;lab.reader=null;
+  try{if(lab.demoTimer){clearInterval(lab.demoTimer);lab.demoTimer=null;}if(reader){await reader.cancel();await task;}cleanBle();if(lab.bleDevice?.gatt.connected)lab.bleDevice.gatt.disconnect();}catch(e){log('disconnect-error',{message:e.message});}
+  finally{lab.port=null;lab.readTask=null;finish('Disconnected. Recorded samples remain available for export.');lab.busy=false;controls();}
+}
+$('disconnect').onclick=disconnect;
+$('demo').onclick=()=>{lab.token++;lab.scans=0;begin('demo');const start=performance.now();let sequence=0;lab.demoTimer=setInterval(()=>{const t=(performance.now()-start)/1000;onFrame({sequence:(sequence++)%65536,timestampUs:Math.round(t*1e6)>>>0,timeMs:t*1000,missedFrames:0,adc:Math.round(35+3550*Math.max(0,Math.sin(t*2.2))**2)});},5);};
+function renderProfiles(){
+  $('profile').replaceChildren();for(const p of profiles){const o=document.createElement('option');o.value=p.id;o.textContent=p.name;$('profile').append(o);}
+  $('profile').value=selectedId;$('profile-name').value=currentProfile().name;renderCalibration();
+}
+$('profile').onchange=()=>{selectedId=$('profile').value;lab.history=[];lab.latest=null;lab.rates=[];persist();renderProfiles();render();};
+$('profile-name').onchange=()=>{currentProfile().name=$('profile-name').value.trim()||'Unnamed sample';persist();renderProfiles();render();};
+$('add-profile').onclick=()=>{if(profiles.length>=32){$('cal-message').textContent='The profile library supports up to 32 samples.';return;}const p=newProfile(`Sample ${profiles.length+1}`);profiles.push(p);selectedId=p.id;lab.history=[];lab.latest=null;lab.rates=[];persist();renderProfiles();render();};
+function commitSettings(){
+  try{settings=validSettings({dividerOhm:Number($('divider').value),vdd:Number($('vdd').value)});persist();$('cal-message').textContent=currentProfile().points.length&&currentProfile().dividerOhm!==settings.dividerOhm?'This calibration uses a different divider. Restore its resistor value or clear it and recalibrate.':'Electrical settings saved. Enter the actual divider resistor you installed.';}
+  catch(e){$('cal-message').textContent=e.message;}
+  $('divider').value=settings.dividerOhm;$('vdd').value=settings.vdd;render();
+}
+$('divider').onchange=commitSettings;$('vdd').onchange=commitSettings;
+function renderCalibration(){
+  const p=currentProfile();$('points').replaceChildren();
+  p.points.forEach((q,i)=>{
+    const row=document.createElement('div');row.className='point';const label=document.createElement('span');label.textContent=`${q.adc.toFixed(1)} ADC → ${q.n.toFixed(2)} N`;
+    const sub=document.createElement('small');sub.textContent=`SD ${q.sd.toFixed(1)} counts · ${q.samples||'—'} samples`;label.append(sub);row.append(label);
+    const remove=document.createElement('button');remove.textContent='Remove';remove.onclick=()=>{
+      if(i===0&&p.points.length>1){$('cal-message').textContent='Remove loaded points before removing the zero reference.';return;}
+      p.points.splice(i,1);if(!p.points.length)p.dividerOhm=null;p.calibrationId=crypto.randomUUID();persist();renderCalibration();render();
+    };row.append(remove);$('points').append(row);
+  });controls();
+}
+function capturePoint(n){
+  if(!fresh()||lab.mode==='demo'||lab.recording||lab.capture||lab.diskStarting||lab.finalizing)return;
+  const profile=currentProfile();
+  if(profile.points.length===0&&n!==0){$('cal-message').textContent='Leave the sensor unloaded and capture 0 N first.';return;}
+  if(profile.points.length&&profile.dividerOhm!==settings.dividerOhm){$('cal-message').textContent='Restore the calibration divider value, or clear this calibration first.';return;}
+  const capture={profileId:profile.id,dividerOhm:settings.dividerOhm,n,frames:[]};lab.capture=capture;$('cal-message').textContent=`Hold ${n.toFixed(2)} N steady for one second…`;controls();
+  setTimeout(()=>{
+    if(lab.capture!==capture)return;lab.capture=null;const frames=capture.frames;
+    if(!fresh()||frames.length<20||frames.at(-1).timeMs-frames[0].timeMs<800||frames.slice(1).some(f=>f.missedFrames>0)){$('cal-message').textContent='Capture needs one second of continuous fresh data. Hold steady and retry.';controls();return;}
+    if(frames.some(f=>f.adc>=4095)){$('cal-message').textContent='ADC reached 4095. Check the load and divider before capturing.';controls();return;}
+    const mean=frames.reduce((s,f)=>s+f.adc,0)/frames.length,sd=Math.sqrt(frames.reduce((s,f)=>s+(f.adc-mean)**2,0)/(frames.length-1));
+    const copy=JSON.parse(JSON.stringify(profile));copy.dividerOhm=capture.dividerOhm;copy.points.push({adc:mean,n,sd,samples:frames.length,capturedUTC:new Date().toISOString()});copy.points.sort((a,b)=>a.adc-b.adc);copy.calibrationId=crypto.randomUUID();
+    try{validateProfiles({schema:PROFILE_SCHEMA,profiles:[copy]});Object.assign(profile,copy);persist();$('cal-message').textContent=`Saved ${mean.toFixed(1)} ADC ± ${sd.toFixed(1)} counts → ${n.toFixed(2)} N. ${profile.points.length<3?'Add '+(3-profile.points.length)+' more measured point(s) for the force curve.':'Force curve ready within the measured range.'}`;}catch(e){$('cal-message').textContent=e.message;}
+    renderCalibration();render();
+  },1100);
+}
+$('zero').onclick=()=>capturePoint(0);
+$('capture').onclick=()=>{const text=$('load').value,n=Number(text)*({kg:9.81,g:.00981,N:1}[$('unit').value]);if(text===''||!Number.isFinite(n)||n<=0){$('cal-message').textContent='Enter a positive measured load. Use the unloaded button for 0 N.';return;}capturePoint(n);};
+$('clear-profile').onclick=()=>{const p=currentProfile();if(p.points.length&&!confirm(`Clear the calibration for ${p.name}?`))return;p.points=[];p.dividerOhm=null;p.calibrationId=crypto.randomUUID();persist();$('cal-message').textContent='Calibration cleared for this sample. Capture its unloaded point first.';renderCalibration();render();};
+$('export-profiles').onclick=()=>download('nova-fsr-profiles.json',JSON.stringify({schema:PROFILE_SCHEMA,protocol:FSR_PROTOCOL,settings,profiles},null,2),'application/json');
+$('import-profiles').onclick=()=>$('profile-file').click();
+$('profile-file').onchange=async()=>{
+  const file=$('profile-file').files[0];if(!file)return;
+  try{if(lab.recording||lab.capture||lab.diskStarting||lab.finalizing)throw Error('Stop recording or capture before importing.');if(file.size>1e6)throw Error('Choose a file smaller than 1 MB.');const next=validateProfiles(JSON.parse(await file.text()));const config=next.settings?validSettings(next.settings):settings;if(!confirm('Replace the saved sample library with this file?'))return;profiles=next.profiles;settings=config;selectedId=profiles[0].id;lab.history=[];lab.latest=null;lab.rates=[];$('divider').value=settings.dividerOhm;$('vdd').value=settings.vdd;persist();renderProfiles();render();$('cal-message').textContent='Profiles imported. Match the selected sample to the physical FSR on A0.';}catch(e){$('cal-message').textContent='Import: '+e.message;}finally{$('profile-file').value='';}
+};
+function canReplaceRecording(){return !(lab.session?.rows.length||lab.disk?.pendingCount())||confirm('Start a new recording? Export the previous recording first if you want to keep it.');}
+function newSession(storage){return {schema:'nova-fsr-session-v1',protocol:FSR_PROTOCOL,name:$('test-name').value.trim(),source:lab.mode,startedUTC:new Date().toISOString(),settings:{...settings},profile:JSON.parse(JSON.stringify(currentProfile())),storage,firstTime:null,sampleCount:0,lastTimeMs:0,rows:[]};}
+function startRecording(){if(!fresh()||lab.capture||!canReplaceRecording())return;lab.disk=null;lab.session=newSession('memory');lab.recording=true;$('disk-status').textContent='';$('csv').textContent='Export CSV';controls();}
+async function startDiskRecording(){
+  if(!fresh()||lab.capture||lab.diskStarting||lab.finalizing||lab.recording||!canReplaceRecording())return;
+  lab.diskStarting=true;controls();const token=lab.token;
+  try{
+    const parent=await showDirectoryPicker({mode:'readwrite',id:'nova-fsr-recordings'});if(token!==lab.token||!fresh())throw Error('Reconnect the sensor and try again.');
+    const next=newSession('disk-segments');next.folder=`nova-fsr-${next.startedUTC.replace(/[:.]/g,'-')}-${crypto.randomUUID().slice(0,6)}`;
+    const directory=await parent.getDirectoryHandle(next.folder,{create:true});
+    const writer=new DiskRecorder(directory,next,CSV_HEADER,e=>{$('disk-status').textContent='Disk error: '+e.message+' Export pending CSV before closing.';if(lab.recording){lab.session.stopReason='Disk recording interrupted.';stopRecording();}});
+    await writer.initialize();if(token!==lab.token||!fresh())throw Error('Connection ended while choosing the folder.');
+    lab.session=next;lab.disk=writer;lab.recording=true;$('csv').textContent='Export pending CSV';lab.diskTimer=setInterval(()=>writer.flush(),30000);
+  }catch(e){$('disk-status').textContent=e.name==='AbortError'?'Folder selection cancelled.':'Disk recording: '+e.message;}finally{lab.diskStarting=false;controls();}
+}
+async function stopRecording(){
+  if(!lab.recording)return;lab.recording=false;clearInterval(lab.diskTimer);lab.diskTimer=null;
+  if(lab.disk){lab.finalizing=true;controls();try{await lab.disk.finish();$('disk-status').textContent=lab.disk.error?'Completed segments remain saved. Export pending CSV.':`Saved to disk: ${lab.disk.saved.toLocaleString()} samples in ${lab.session.folder}.`;}catch(e){$('disk-status').textContent='Disk save: '+e.message;}finally{lab.finalizing=false;}}
+  controls();
+}
+$('record').onclick=()=>lab.recording?stopRecording():startRecording();$('record-disk').onclick=startDiskRecording;
+$('csv').onclick=()=>{if(lab.disk){const csv=lab.disk.recoveryCSV();if(csv)download(filename('csv'),csv,'text/csv');}else if(lab.session)download(filename('csv'),CSV_HEADER+'\n'+lab.session.rows.map(r=>csvRow(r,lab.session)).join('\n')+'\n','text/csv');};
+$('session-json').onclick=()=>{if(lab.session)download(filename('json'),JSON.stringify(lab.session,null,2),'application/json');};
+$('firmware').onclick=()=>download('NovaFSRRaw12.ino',FIRMWARE_SOURCE,'text/plain');
+$('diagnostics').onclick=()=>download('nova-fsr-usb-diagnostics.json',JSON.stringify({app:'NOVA FSR Lab v1 / USB v5',protocol:FSR_PROTOCOL,createdUTC:new Date().toISOString(),userAgent:navigator.userAgent,transport:WEBUSB?'WebUSB':'Web Serial',visible:document.visibilityState,bytes:lab.bytes,frames:lab.scans,retries:lab.retries,events:lab.events},null,2),'application/json');
+const labels={valid:'Within calibrated range',uncalibrated:'Capture 0 N + two measured loads',outside_range:'Outside measured calibration range',adc_rail:'ADC at upper limit',divider_changed:'Calibration uses a different divider',demo:'Synthetic ADC · force not calibrated'};
+function formatResistance(r){if(r===null)return 'High/open';if(r>=1e6)return (r/1e6).toFixed(2)+' <em>MΩ</em>';if(r>=1000)return (r/1000).toFixed(2)+' <em>kΩ</em>';return r.toFixed(0)+' <em>Ω</em>';}
+function chart(canvas,rows,getValue,maxY,yTitle,{calibration=false}={}){
+  const rect=canvas.getBoundingClientRect();if(rect.width<50||rect.height<50)return;
+  const ratio=Math.min(devicePixelRatio||1,2),width=Math.round(rect.width),height=Math.round(rect.height);
+  if(canvas.width!==Math.round(width*ratio)||canvas.height!==Math.round(height*ratio)){canvas.width=Math.round(width*ratio);canvas.height=Math.round(height*ratio);}
+  const ctx=canvas.getContext('2d');ctx.setTransform(ratio,0,0,ratio,0,0);ctx.clearRect(0,0,width,height);
+  const pad={l:48,r:13,t:17,b:32},w=width-pad.l-pad.r,h=height-pad.t-pad.b;
+  const end=calibration?4095:(lab.latest?.timeMs||0)/1000,span=calibration?4095:Number($('window').value),start=calibration?0:Math.max(0,end-span),right=calibration?4095:Math.max(span,end);
+  const X=v=>pad.l+(v-start)/(right-start)*w,Y=v=>pad.t+h-v/maxY*h;
+  ctx.font='10px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';ctx.lineWidth=1;ctx.fillStyle='#6a7e73';
+  for(let i=0;i<=4;i++){const y=pad.t+i*h/4,value=maxY*(1-i/4);ctx.strokeStyle='#edf1ea';ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(width-pad.r,y);ctx.stroke();ctx.textAlign='right';ctx.fillText(maxY<2?value.toFixed(2):Math.round(value).toString(),pad.l-8,y+3);}
+  for(let i=0;i<=4;i++){const v=start+(right-start)*i/4,x=X(v);ctx.textAlign=i===4?'right':i===0?'left':'center';ctx.fillText(calibration?Math.round(v).toString():v.toFixed(1),x,height-13);}
+  ctx.textAlign='left';ctx.fillText(yTitle,0,10);ctx.textAlign='right';ctx.fillText(calibration?'ADC counts':'Time (s)',width-pad.r,height-1);
+  ctx.save();ctx.beginPath();ctx.rect(pad.l,pad.t,w,h);ctx.clip();ctx.strokeStyle=calibration?'#15715c':canvas.id==='adc-chart'?'#277790':'#15715c';ctx.lineWidth=calibration?1.8:1.5;ctx.beginPath();let pen=false;
+  for(const row of rows){const x=calibration?row.adc:row.timeMs/1000;if(x<start||x>right)continue;const value=getValue(row);if(value===null||!Number.isFinite(value)){pen=false;continue;}const px=X(x),py=Y(value);if(!pen||row.missedFrames>0)ctx.moveTo(px,py);else ctx.lineTo(px,py);pen=true;}
+  ctx.stroke();if(calibration){for(const row of rows){ctx.beginPath();ctx.arc(X(row.adc),Y(row.n),3,0,Math.PI*2);ctx.fillStyle='#15715c';ctx.fill();}}
+  ctx.restore();if(rows.length===0){ctx.fillStyle='#849589';ctx.font='11px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';ctx.textAlign='center';ctx.fillText(calibration?'Measured load anchors appear here':'Waiting for acquisition data',pad.l+w/2,pad.t+h/2);}
+}
+function render(){
+  const live=fresh(),p=currentProfile(),f=live?(lab.mode==='demo'?{n:null,status:'demo'}:forceAt(p,lab.latest.adc,settings.dividerOhm)):null;
+  $('visual-name').textContent=p.name;$('wiring-resistor').textContent=settings.dividerOhm>=1000?(settings.dividerOhm/1000)+' kΩ':settings.dividerOhm+' Ω';
+  $('adc').textContent=live?lab.latest.adc:'—';$('force').innerHTML=(f?.n!==null&&f?.n!==undefined?f.n.toFixed(2):'—')+' <em>N</em>';$('force-status').textContent=f?labels[f.status]:'Waiting for fresh data';
+  if(live){const e=electricalAt(lab.latest.adc,settings);$('resistance').innerHTML=formatResistance(e.resistance);$('voltage').textContent=`${e.voltage.toFixed(3)} V · estimate at ${settings.vdd.toFixed(2)} V supply`;
+    const span=lab.latest.timeMs-lab.rates[0].timeMs;$('rate').innerHTML=(span>0?((lab.rates.length-1)*1000/span).toFixed(1):'—')+' <em>Hz</em>';
+    $('sensor-fill').setAttribute('fill',`hsl(${120*(1-lab.latest.adc/4095)},78%,45%)`);$('sensor-value').textContent=lab.latest.adc;$('visual-state').textContent=lab.mode==='demo'?'Synthetic ADC signal':f.n===null?labels[f.status]:`${f.n.toFixed(2)} N · calibrated estimate`;
+    $('sensor-image').setAttribute('aria-label',`${p.name}: ${lab.latest.adc} ADC counts; colour follows raw ADC`);
+  }else{$('resistance').textContent='—';$('voltage').textContent='Divider estimate · voltage —';$('rate').innerHTML='— <em>Hz</em>';$('sensor-fill').setAttribute('fill','#d5ded8');$('sensor-value').textContent='—';$('visual-state').textContent=lab.mode?'Stream paused':'Waiting for a fresh reading';}
+  $('missing').textContent=`${lab.missing.toLocaleString()} missing samples`;
+  const view=$('plot-mode').value;$('adc-panel').hidden=view==='force';$('force-panel').hidden=view==='adc';
+  if(view!=='force')chart($('adc-chart'),lab.history,r=>r.adc,4095,'ADC');
+  if(view!=='adc')chart($('force-chart'),lab.history,r=>lab.mode==='demo'?null:forceAt(p,r.adc,settings.dividerOhm).n,Math.max(1,p.points.at(-1)?.n||100)*1.1,'N');
+  chart($('cal-chart'),p.points,r=>r.n,Math.max(1,p.points.at(-1)?.n||1)*1.1,'Applied N',{calibration:true});
+  $('plot-note').textContent=lab.mode==='demo'?'DEMO · Synthetic ADC only. Recorded demo data is labelled; force conversion and calibration capture are disabled.':live?`A0 · ${p.name} · ADC is unscaled. Force uses this profile's piecewise linear curve; gaps retain force validity.`:'Live history remains visible when acquisition pauses. Connect to continue.';
+  if(lab.session){const s=lab.session;$('record-status').textContent=`${s.sampleCount.toLocaleString()} samples · ${(s.lastTimeMs/1000).toFixed(1)} s · ${s.profile.name}${s.source==='demo'?' · DEMO':''}${s.stopReason?' · '+s.stopReason:''}`;}
+  if(lab.disk&&lab.recording&&!lab.disk.error)$('disk-status').textContent=`${lab.disk.saved.toLocaleString()} samples saved · ${lab.disk.pendingCount().toLocaleString()} pending · ${lab.session.folder}`;
+}
+function health(){
+  if(WEBUSB&&lab.mode==='USB'&&lab.port&&!lab.port.abortError&&performance.now()-(lab.lastArrival||lab.usbStart)>5000){const e=new Error(lab.bytes?'USB bytes arrived without valid FSR frames. Upload NovaFSRRaw12; the insole sketch uses a different protocol.':'No FSR data received.');e.noRetry=lab.bytes>0&&lab.scans===0;log('frame-timeout',{bytes:lab.bytes});lab.port.abort(e).catch(err=>log('abort-error',{message:err.message}));}
+}
+document.addEventListener('visibilitychange',()=>{log('visibility',{state:document.visibilityState});if(document.visibilityState==='visible')wakeScreen();});
+navigator.usb?.addEventListener?.('disconnect',e=>{if(lab.mode==='USB'&&lab.port?.device===e.device){lab.usbWanted=false;lab.port.abort(new Error('Device unplugged. Reconnect and select the XIAO.')).catch(()=>{});}});
+window.addEventListener('beforeunload',e=>{if(lab.recording||lab.diskStarting||lab.finalizing||lab.session?.rows.length||lab.disk?.pendingCount()){e.preventDefault();e.returnValue='';}});
+for(const id of ['window','plot-mode'])$(id).onchange=render;
+$('usb').textContent=WEBUSB?'Connect USB · Android/WebUSB':'Connect USB';
+$('support').textContent=[!isSecureContext?'Use an HTTPS page for USB/BLE.':'',WEBUSB?'Android USB v5 recovery · NovaFSRRaw12 firmware':'Desktop Web Serial · NovaFSRRaw12 firmware','Keep this page visible; screen wake lock is requested while connected.'].filter(Boolean).join(' · ');
+$('divider').value=settings.dividerOhm;$('vdd').value=settings.vdd;renderProfiles();render();controls();
+setInterval(()=>{health();controls();render();if(fresh()&&lab.mode!=='demo')message(`Receiving ${lab.mode} · A0 · frame ${lab.latest.sequence}`);else if(lab.latest&&lab.mode)message(lab.mode==='USB'&&WEBUSB?'USB data paused. Checking the connection…':'Waiting for fresh FSR data.');},150);
+</script>
+</body></html>
