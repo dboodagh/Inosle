@@ -9,7 +9,7 @@
 <section class="intro"><div><div class="eyebrow">ACQUIRE · CALIBRATE · UNDERSTAND</div><h1>Every step, measured.</h1><p>Raw signals first. Newtons backed by your own calibration.</p></div><button id="demo" class="secondary">Explore demo</button></section>
 <section class="metrics" aria-label="Acquisition status"><div><small>RECEIVED RATE</small><strong id="rate">— <em>Hz</em></strong></div><div><small>MISSING SCANS</small><strong id="gaps">0</strong></div><div><small>CALIBRATED CHANNELS</small><strong id="cal-count">0 <em>/ 16</em></strong></div><div><small>MEASURED SENSOR SUM</small><strong id="total">— <em>N</em></strong></div></section>
 <div class="workspace"><aside>
-<section class="card"><div class="section-label">01 / CONNECT</div><h2>Bring your insole online</h2><p class="muted">Use <b>InsoleRaw12</b> for desktop serial, or <b>InsoleRaw12WebUSB</b> for Android Chrome USB. The original 16-byte firmware is not compatible.</p><div class="button-stack"><button id="usb">Connect USB</button><button id="ble" class="secondary">Connect Bluetooth</button><button id="disconnect" class="secondary" disabled>Disconnect</button></div><p id="status" role="status" aria-live="polite">Ready. Connect a device or explore the demo.</p><p id="support" class="muted small"></p></section>
+<section class="card"><div class="section-label">01 / CONNECT</div><h2>Bring your insole online</h2><p class="muted">Use <b>InsoleRaw12</b> for desktop serial, or <b>InsoleRaw12WebUSB</b> for Android Chrome USB. The original 16-byte firmware is not compatible.</p><div class="button-stack"><button id="usb">Connect USB</button><button id="ble" class="secondary">Connect Bluetooth</button><button id="disconnect" class="secondary" disabled>Disconnect</button><button id="usb-diagnostics" class="secondary">Export USB diagnostics</button></div><p id="status" role="status" aria-live="polite">Ready. Connect a device or explore the demo.</p><p id="support" class="muted small"></p></section>
 <section class="card"><div class="section-label">02 / RECORD</div><h2>Capture a session</h2><label>Session name<input id="session-name" maxlength="80" value="Treadmill walk"></label><button id="record" disabled>Start recording</button><button id="record-disk" class="secondary" disabled>Record to disk</button><p id="disk-status" class="small muted" role="status"></p><p id="record-status" role="status">No samples recorded.</p><div class="button-row"><button id="csv" class="secondary" disabled>Export CSV</button><button id="session-json" class="secondary" disabled>Session JSON</button></div><p class="muted small">CSV includes raw ADC, force validity and acquisition timestamps. Session JSON includes the exact calibration used. Standard recording stays in this tab until exported. Record to disk saves CSV segments in a folder you choose, about every 30 seconds. Keep this tab open and the computer awake; wait for “Saved to disk” before closing.</p></section>
 <section class="card"><div class="section-label">03 / CALIBRATE</div><h2>One sensor at a time</h2><p class="muted small">Use a scale as the force reference. A thumb applies force; it cannot measure it. Keep the loading disc and support consistent.</p><label>Sensor<select id="sensor"></select></label><div class="live-reading"><span>LIVE ADC</span><b id="cal-live">—</b></div><div class="button-row"><label>Reference load<input id="load" type="number" min="0" step="any" value="0"></label><label>Unit<select id="unit"><option value="g">grams</option><option value="kg">kilograms</option><option value="N">newtons</option></select></label></div><button id="capture" disabled>Capture 1-second average</button><p id="cal-message" role="status" class="small">Start with an unloaded 0 N point, then add at least two known loads.</p><div id="points" class="point-list"></div><div class="button-row"><button id="export-cal" class="secondary">Export calibration</button><button id="import-cal" class="secondary">Import</button></div><input id="cal-file" type="file" accept=".json,application/json" hidden><p class="muted small">Repeat loading and unloading to check repeatability; validate at loads not used for calibration. No force is extrapolated beyond your measured range.</p></section>
 </aside>
@@ -455,7 +455,17 @@ globalThis.InsoleDecoder=InsoleDecoder;
 // Used on Android even when Web Serial exists, and elsewhere when Web Serial is unavailable.
 // CDC requests: SET_LINE_CODING (0x20), SET_CONTROL_LINE_STATE (0x22).
 class InsoleUsbCdcPort {
-  constructor(device) { this.device=device;this.readable=null;this.running=false;this.closing=null; }
+  constructor(device,{readTimeoutMs=3000,operationTimeoutMs=4000,closeTimeoutMs=2000,onEvent=()=>{}}={}) {
+    this.device=device;this.readable=null;this.running=false;this.closing=null;
+    this.readTimeoutMs=readTimeoutMs;this.operationTimeoutMs=operationTimeoutMs;this.closeTimeoutMs=closeTimeoutMs;this.onEvent=onEvent;
+    this.selected=null;this.abortError=null;
+  }
+  async timed(promise,phase,ms=this.operationTimeoutMs) {
+    let timer;
+    try{return await Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>{
+      const error=new DOMException(`USB ${phase} timed out.`, 'TimeoutError');error.usbPhase=phase;reject(error);
+    },ms);})]);}finally{clearTimeout(timer);}
+  }
   static async requestPort() {
     // Show all browser-accessible devices: firmware/core builds can use different USB IDs.
     const device=await navigator.usb.requestDevice({filters:[]});
@@ -483,42 +493,76 @@ class InsoleUsbCdcPort {
     throw new Error('No compatible XIAO serial interface. Start the normal InsoleRaw12 sketch, not the bootloader.');
   }
   async open({baudRate=115200}={}) {
+    if(this.device.opened)throw new Error('USB is still open. Unplug the insole once before reconnecting.');
     try{
-      const selected=this.findInterfaces();
-      await this.device.open();
+      this.closing=null;this.abortError=null;this.openFailed=false;
+      const selected=this.selected=this.findInterfaces();
+      this.onEvent('interface',{kind:selected.kind,interface:selected.data.interfaceNumber,endpoint:selected.endpoint.endpointNumber});
+      const opening=this.device.open();
+      // If the OS finishes opening after the timeout, release that late handle too.
+      opening.then(()=>{if(this.openFailed&&this.device.opened)return this.device.close();}).catch(()=>{});
+      await this.timed(opening,'open');
       if(this.device.configuration?.configurationValue!==selected.configuration.configurationValue)
-        await this.device.selectConfiguration(selected.configuration.configurationValue);
-      if(selected.kind==='cdc')await this.device.claimInterface(selected.control.interfaceNumber);
-      await this.device.claimInterface(selected.data.interfaceNumber);
-      if(selected.kind==='cdc')await this.device.selectAlternateInterface(selected.control.interfaceNumber,selected.controlAlt.alternateSetting);
-      await this.device.selectAlternateInterface(selected.data.interfaceNumber,selected.dataAlt.alternateSetting);
+        await this.timed(this.device.selectConfiguration(selected.configuration.configurationValue),'configuration');
+      if(selected.kind==='cdc')await this.timed(this.device.claimInterface(selected.control.interfaceNumber),'control interface');
+      await this.timed(this.device.claimInterface(selected.data.interfaceNumber),'data interface');
+      if(selected.kind==='cdc'&&selected.control.alternate?.alternateSetting!==selected.controlAlt.alternateSetting)
+        await this.timed(this.device.selectAlternateInterface(selected.control.interfaceNumber,selected.controlAlt.alternateSetting),'control alternate');
+      if(selected.data.alternate?.alternateSetting!==selected.dataAlt.alternateSetting)
+        await this.timed(this.device.selectAlternateInterface(selected.data.interfaceNumber,selected.dataAlt.alternateSetting),'data alternate');
       const line=new Uint8Array(7);new DataView(line.buffer).setUint32(0,baudRate,true);line[6]=8;
       const setup={requestType:'class',recipient:'interface',index:selected.kind==='cdc'?selected.control.interfaceNumber:selected.data.interfaceNumber};
       const requests=selected.kind==='cdc'?[[0x20,0,line],[0x22,1,new Uint8Array()]]:[[0x22,1,new Uint8Array()]];
       for(const [request,value,payload] of requests){
-        const result=await this.device.controlTransferOut({...setup,request,value},payload);
+        const result=await this.timed(this.device.controlTransferOut({...setup,request,value},payload),'line state');
         if(result.status!=='ok')throw new Error(`USB serial setup failed (${result.status}).`);
       }
-      // DTR above is essential: firmware's `if (Serial)` gates USB output.
+      // Small multi-packet reads reduce Android USB bridge round trips. Short packets
+      // still complete a read promptly; the decoder accepts arbitrary chunk boundaries.
+      const readSize=selected.endpoint.packetSize*8;
+      let stalls=0;
       this.running=true;
       this.readable=new ReadableStream({
+        start:controller=>{this.controller=controller;},
         pull:async controller=>{
+          const readStarted=Date.now();
           try{
-            const result=await this.device.transferIn(selected.endpoint.endpointNumber,selected.endpoint.packetSize);
+            // A ZLP or a cleared STALL produces no stream chunk. Keep reading here:
+            // returning an empty pull at highWaterMark=0 can strand reader.read().
+            while(this.running){
+            const remaining=Math.max(1,this.readTimeoutMs-(Date.now()-readStarted));
+            const result=await this.timed(this.device.transferIn(selected.endpoint.endpointNumber,readSize),'read',remaining);
             if(!this.running)return;
+            if(result.status==='stall'&&stalls++<2){
+              this.onEvent('endpoint-stall',{attempt:stalls});
+              await this.timed(this.device.clearHalt('in',selected.endpoint.endpointNumber),'clear halt');
+              continue;
+            }
             if(result.status!=='ok')throw new Error(`USB read failed (${result.status}).`);
-            if(result.data?.byteLength)controller.enqueue(new Uint8Array(result.data.buffer,result.data.byteOffset,result.data.byteLength).slice());
-          }catch(error){if(this.running){this.running=false;controller.error(error);}}
+            if(result.data?.byteLength){
+              stalls=0;
+              controller.enqueue(new Uint8Array(result.data.buffer,result.data.byteOffset,result.data.byteLength).slice());
+              return;
+            }else{
+              if(Date.now()-readStarted>=this.readTimeoutMs)throw new Error('USB repeatedly returned empty data.');
+              // Yield on zero-length completions; avoid a microtask spin on Android.
+              await new Promise(resolve=>setTimeout(resolve,5));
+            }
+            }
+          }catch(error){if(this.running){this.running=false;this.onEvent('read-error',{name:error.name,message:error.message});controller.error(this.abortError||error);}}
         },
         // Closing the USB device cancels an outstanding transferIn, including at idle.
         cancel:()=>this.close(),
       },{highWaterMark:0});
-    }catch(error){await this.close().catch(()=>{});throw error;}
+    }catch(error){this.openFailed=true;this.onEvent('setup-error',{name:error.name,message:error.message});await this.close().catch(()=>{});throw error;}
   }
+  abort(error){this.abortError=error;this.running=false;try{this.controller?.error(error);}catch{}return this.close();}
   async close() {
     this.running=false;
     if(!this.closing)this.closing=(async()=>{if(this.device.opened)await this.device.close();})();
-    await this.closing;
+    // A timed-out transferIn must be cancelled by close before another read/open.
+    // Promise.race alone does not cancel a USB transfer.
+    await this.timed(this.closing,'close',this.closeTimeoutMs);
   }
 }
 </script><script>// Bounded buffering: close each CSV segment so completed data survives tab loss.
@@ -597,6 +641,17 @@ let mode=null,busy=false,port=null,reader=null,readTask=null,device=null,charact
 let latest=null,lastArrival=0,history=[],rateWindow=[],missing=0,recording=false,session=null,capture=null;
 let pointerState=null;
 let disk=null,diskStarting=false,diskFinishing=false,diskTimer=null;
+const usbState={generation:0,wanted:false,reconnecting:false,retries:0,timer:null,started:0,lastByte:0,bytes:0,scans:0,events:[],lastError:null};
+let wakeLock=null,wakeRequest=null;
+function usbLog(event,detail={}){usbState.events.push({utc:new Date().toISOString(),event,...detail});if(usbState.events.length>80)usbState.events.shift();}
+async function keepScreenAwake(){
+  if(!mode||document.visibilityState==='hidden'||!navigator.wakeLock||wakeLock||wakeRequest)return;
+  wakeRequest=navigator.wakeLock.request('screen');
+  try{const lock=await wakeRequest;if(!mode){await lock.release();return;}wakeLock=lock;lock.addEventListener('release',()=>{if(wakeLock===lock)wakeLock=null;});}
+  catch(error){usbLog('wake-lock-unavailable',{message:error.message});}
+  finally{wakeRequest=null;}
+}
+function releaseScreen(){const lock=wakeLock;wakeLock=null;if(lock)lock.release().catch(()=>{});}
 const decoder=new InsoleDecoder(onFrame);
 const coords=Array.from({length:16},(_,i)=>({x:Number($(`heat-${i}`).getAttribute('cx')),y:Number($(`heat-${i}`).getAttribute('cy'))}));
 function validateCalibration(c){
@@ -631,10 +686,10 @@ function forceFor(channel,adc,cal=calibration){
 function fresh(){return latest&&performance.now()-lastArrival<1500;}
 function status(message){$('status').textContent=message;}
 function controls(){
-  $('usb').disabled=busy||!!mode||!HAS_USB||!window.isSecureContext;
-  $('ble').disabled=busy||!!mode||!navigator.bluetooth;
-  $('disconnect').disabled=busy||!mode;
-  $('demo').disabled=busy||!!mode;
+  $('usb').disabled=busy||usbState.reconnecting||!!mode||!HAS_USB||!window.isSecureContext;
+  $('ble').disabled=busy||usbState.reconnecting||!!mode||!navigator.bluetooth;
+  $('disconnect').disabled=busy||(!mode&&!usbState.reconnecting);
+  $('demo').disabled=busy||usbState.reconnecting||!!mode;
   $('record').disabled=diskStarting||diskFinishing||(!recording&&(!mode||!fresh()));
   $('record-disk').disabled=diskStarting||diskFinishing||recording||!fresh()||!mode||!window.showDirectoryPicker;
   $('record-disk').hidden=!window.showDirectoryPicker;
@@ -642,28 +697,67 @@ function controls(){
   for(const id of ['sensor','load','unit','import-cal','session-name'])$(id).disabled=diskStarting||diskFinishing||recording||!!capture;
   $('csv').disabled=recording||diskFinishing||!(session?.rows.length||disk?.pendingCount());
   $('session-json').disabled=recording||diskFinishing||!session;
-  $('connection-pill').textContent=mode==='demo'?'DEMO · synthetic':mode?`${mode} · ${fresh()?'Streaming':'Waiting for data'}`:'Offline';
+  $('connection-pill').textContent=usbState.reconnecting?'USB · Reconnecting':mode==='demo'?'DEMO · synthetic':mode?`${mode} · ${fresh()?'Streaming':'Waiting for data'}`:'Offline';
 }
 function clearLive(){pointerState=null;latest=null;history=[];rateWindow=[];lastArrival=0;decoder.reset();$('rate').innerHTML='— <em>Hz</em>';$('cal-live').textContent='—';$('total').innerHTML='— <em>N</em>';for(let i=0;i<16;i++){$(`zone-${i}`).style.fill='#d1d5db';$(`heat-${i}`).style.opacity=0;}$('cop-marker').style.opacity=0;$('cop-status').textContent='CoP unavailable: no fresh acquisition data.';renderReadings();}
-function beginConnection(kind){clearLive();missing=0;$('gaps').textContent='0';mode=kind;status(kind==='demo'?'Demo uses synthetic ADC signals. It cannot calibrate your sensors.':`Connected via ${kind}. Waiting for Raw12 packets…`);controls();}
-function finishConnection(message){if(recording)stopRecording();if(capture){capture=null;$('cal-message').textContent='Capture cancelled because the connection ended.';}mode=null;clearLive();controls();status(message);}
+function beginConnection(kind){clearLive();missing=0;$('gaps').textContent='0';mode=kind;status(kind==='demo'?'Demo uses synthetic ADC signals. It cannot calibrate your sensors.':`Connected via ${kind}. Waiting for Raw12 packets…`);controls();if(kind!=='demo')keepScreenAwake();}
+function finishConnection(message){if(recording)stopRecording();if(capture){capture=null;$('cal-message').textContent='Capture cancelled because the connection ended.';}mode=null;releaseScreen();clearLive();controls();status(message);}
 async function disconnect(){
-  if(busy)return;busy=true;controls();
-  try{if(demoTimer){clearInterval(demoTimer);demoTimer=null;}if(reader){await reader.cancel();await readTask;}if(device?.gatt.connected)device.gatt.disconnect();}
-  catch(e){status('Disconnect: '+e.message);}finally{finishConnection('Disconnected. Recorded samples remain available for export.');busy=false;controls();}
+  if(busy)return;busy=true;usbState.wanted=false;usbState.generation++;usbState.reconnecting=false;clearTimeout(usbState.timer);usbState.timer=null;controls();
+  const oldReader=reader,oldTask=readTask;reader=null;
+  try{if(demoTimer){clearInterval(demoTimer);demoTimer=null;}if(oldReader){await oldReader.cancel();await oldTask;}if(device?.gatt.connected)device.gatt.disconnect();}
+  catch(e){usbLog('disconnect-error',{message:e.message});}
+  finally{port=null;readTask=null;usbLog('manual-disconnect');finishConnection('Disconnected. Recorded samples remain available for export.');busy=false;controls();}
 }
 $('disconnect').onclick=disconnect;
 $('usb').onclick=async()=>{
-  busy=true;controls();let opened=false;
-  try{port=USE_WEBUSB?await InsoleUsbCdcPort.requestPort():await navigator.serial.requestPort();await port.open({baudRate:115200});opened=true;reader=port.readable.getReader();beginConnection('USB');readTask=readSerial();}
-  catch(e){if(opened&&port){try{await port.close();}catch{}}port=null;finishConnection(usbErrorMessage(e));}
+  busy=true;usbState.wanted=true;usbState.retries=0;usbState.lastError=null;const generation=++usbState.generation;controls();
+  try{const selected=USE_WEBUSB?await InsoleUsbCdcPort.requestPort():await navigator.serial.requestPort();usbLog('selected',{transport:USE_WEBUSB?'WebUSB':'Web Serial',vendorId:selected.device?.vendorId,productId:selected.device?.productId});await openUsb(selected,generation);}
+  catch(e){usbState.wanted=false;port=null;usbState.lastError=e.message;usbLog('connection-error',{name:e.name,message:e.message});finishConnection(usbErrorMessage(e));}
   finally{busy=false;controls();}
 };
-async function readSerial(){
-  let reason='USB disconnected. Samples remain available for export.';
-  try{while(true){const {value,done}=await reader.read();if(done)break;if(value)decoder.push(value);}}
-  catch(e){reason='USB stream ended: '+e.message;}
-  finally{reader.releaseLock();reader=null;try{await port.close();}catch{}port=null;finishConnection(reason);}
+async function openUsb(selected,generation){
+  if(USE_WEBUSB)selected.onEvent=usbLog;
+  await selected.open({baudRate:115200});
+  if(generation!==usbState.generation||!usbState.wanted){await selected.close();return;}
+  let activeReader;
+  try{activeReader=selected.readable.getReader();}catch(error){await selected.close().catch(()=>{});throw error;}
+  port=selected;reader=activeReader;
+  usbState.started=performance.now();usbState.lastByte=usbState.started;usbState.bytes=0;usbState.scans=0;usbState.reconnecting=false;
+  usbLog('opened',{attempt:usbState.retries});beginConnection('USB');
+  readTask=readSerial(selected,activeReader,generation);
+}
+function scheduleUsbReconnect(selected,generation,error){
+  const timeoutDuringSetup=error?.name==='TimeoutError'&&error.usbPhase!=='read';
+  if(!USE_WEBUSB||!usbState.wanted||generation!==usbState.generation||usbState.retries>=2||selected.device.opened||timeoutDuringSetup||error?.noRetry||['NotFoundError','SecurityError','NotAllowedError'].includes(error?.name)){
+    if(USE_WEBUSB&&usbState.wanted&&usbState.retries>=2&&!error?.noRetry)status('USB did not resume after 2 attempts. Unplug the insole once, reconnect, and tap Connect USB. Export USB diagnostics if it repeats.');
+    usbState.reconnecting=false;usbState.wanted=false;controls();return;
+  }
+  usbState.reconnecting=true;usbState.retries++;controls();
+  status(`USB stream stalled. Reconnecting (${usbState.retries}/2)… Recorded samples remain available for export.`);
+  usbState.timer=setTimeout(async()=>{
+    usbState.timer=null;if(!usbState.wanted||generation!==usbState.generation)return;
+    usbLog('reconnect',{attempt:usbState.retries});
+    const next=new InsoleUsbCdcPort(selected.device);
+    try{await openUsb(next,generation);}
+    catch(e){if(generation!==usbState.generation)return;usbState.lastError=e.message;usbLog('reconnect-error',{name:e.name,message:e.message});finishConnection(usbErrorMessage(e));scheduleUsbReconnect(next,generation,e);}
+    finally{controls();}
+  },500);
+}
+async function readSerial(selected,activeReader,generation){
+  let error=null;
+  try{while(generation===usbState.generation){const {value,done}=await activeReader.read();if(done)break;if(value){usbState.bytes+=value.byteLength;usbState.lastByte=performance.now();decoder.push(value);}}}
+  catch(e){error=selected.abortError||e;}
+  finally{
+    activeReader.releaseLock();
+    try{await selected.close();}catch(e){error=e;usbLog('close-error',{message:e.message});}
+    if(generation!==usbState.generation||port!==selected)return;
+    reader=null;port=null;usbState.lastError=error?.message||'USB stream ended.';
+    usbLog('stream-ended',{message:usbState.lastError,bytes:usbState.bytes,scans:usbState.scans});
+    if(recording&&session)session.stopReason='USB was interrupted. Collected samples were preserved; start a new recording after reconnection.';
+    finishConnection(usbErrorMessage(error||new Error('Stream ended. Reconnect the insole.'))+' Recorded samples remain available for export.');
+    scheduleUsbReconnect(selected,generation,error);
+  }
 }
 function onBleData(event){decoder.push(event.target.value);}
 function onBleDisconnected(){if(characteristic)characteristic.removeEventListener('characteristicvaluechanged',onBleData);characteristic=null;finishConnection('Bluetooth disconnected. Samples remain available for export.');}
@@ -676,10 +770,10 @@ $('ble').onclick=async()=>{
 $('demo').onclick=()=>{beginConnection('demo');let seq=0;const start=performance.now();demoTimer=setInterval(()=>{const t=(performance.now()-start)/1000;const adc=Array.from({length:16},(_,i)=>Math.round(32+3100*Math.max(0,Math.sin(t*3-i*.27))**4));onFrame({sequence:(seq++)%65536,timestampUs:Math.round(t*1e6)>>>0,timeMs:t*1000,missedFrames:0,adc});},20);};
 function onFrame(frame){
   if(!mode)return;
+  if(mode==='USB'){usbState.scans++;if(usbState.scans===1)usbLog('first-scan',{sequence:frame.sequence});}
   const now=performance.now();lastArrival=now;latest=frame;history.push({frame,received:now});history=history.filter(x=>now-x.received<=1500);rateWindow.push({t:frame.timeMs,seq:frame.sequence});while(rateWindow.length>2&&frame.timeMs-rateWindow[0].t>2000)rateWindow.shift();
-  const span=frame.timeMs-rateWindow[0].t;$('rate').innerHTML=(span>0?((rateWindow.length-1)*1000/span).toFixed(1):'—')+' <em>Hz</em>';
-  missing+=frame.missedFrames;$('gaps').textContent=missing;
-  if(mode!=='demo')status(`Receiving ${mode} · Raw12 · scan ${frame.sequence}`);
+  missing+=frame.missedFrames;
+  // Render live status at display rate, rather than updating a live region 200 times/s.
   if(recording&&!disk?.error){
     if(session.firstTime===null)session.firstTime=frame.timeMs;
     const forces=frame.adc.map((raw,i)=>session.source==='demo'?{n:null,status:'demo'}:forceFor(i,raw,session.calibration));
@@ -692,6 +786,7 @@ function onFrame(frame){
 }
 function renderReadings(){
   const live=fresh();const forces=live?latest.adc.map((v,i)=>mode==='demo'?{n:null,status:'demo'}:forceFor(i,v)):null;
+  if(live){const span=latest.timeMs-rateWindow[0].t;$('rate').innerHTML=(span>0?((rateWindow.length-1)*1000/span).toFixed(1):'—')+' <em>Hz</em>';$('gaps').textContent=missing;}
   $('readings').innerHTML=SENSOR_TO_CHANNEL.map((i,sensor)=>{const f=forces?.[i];const label=!f?'No live data':f.status==='valid'?f.n.toFixed(2)+' N':({uncalibrated:'Uncalibrated',outside_range:'Outside range',adc_rail:'ADC at rail',demo:'Demo signal'})[f.status];return `<div class="reading"><small>S${sensor}<span>ADC</span></small><b>${live?latest.adc[i]:'—'}</b><span>${label}</span></div>`;}).join('');
   const forceMode=$('display-mode').value==='force',limit=Number($('force-scale').value);
   $('force-scale-label').hidden=!forceMode;$('legend-min').textContent=forceMode?'0 N':'0 ADC';$('legend-max').textContent=forceMode?`${limit>0?limit:'—'} N`:'4095 ADC';
@@ -798,13 +893,25 @@ $('cal-file').onchange=async()=>{const file=$('cal-file').files[0];if(!file)retu
 $('display-mode').onchange=()=>{pointerState=null;renderReadings();};$('force-scale').oninput=renderReadings;
 for(const id of ['pointer-noise','pointer-smoothing'])$(id).oninput=()=>{pointerState=null;renderReadings();};
 function usbErrorMessage(error){
+  if(error.name==='TimeoutError')return error.usbPhase==='read'?'USB stopped delivering data for 3 seconds.':`USB ${error.usbPhase||'operation'} did not finish. Unplug the insole once, then reconnect.`;
   if(error.name==='NotFoundError'||error.name==='AbortError')return 'USB selection cancelled or no device selected. On Android, use a USB data/OTG connection and select the Seeed XIAO. If it is absent, check that the phone detects the USB device and the normal sketch is running.';
   if(USE_WEBUSB&&['SecurityError','NetworkError','NotAllowedError','InvalidStateError'].includes(error.name))return `Android USB access failed: ${error.message} Close other USB apps, reconnect and grant permission. If Android or the browser reserves this interface, WebUSB cannot use it; a native Android USB app or a firmware WebUSB interface is needed.`;
   return 'USB: '+error.message;
 }
 $('usb').textContent=USE_WEBUSB&&navigator.usb?'Connect USB (Android / WebUSB)':'Connect USB';
-$('support').textContent=[!window.isSecureContext?'Open the HTTPS GitHub Pages link.':'',USE_WEBUSB?(navigator.usb?'Android USB v4: use the InsoleRaw12WebUSB firmware. The chooser shows all browser-accessible USB devices. Choose your XIAO / Smart Insole. If the list is empty, unlock the phone, reconnect and check Android USB access.':'This browser has no supported USB API.'):'USB uses native Web Serial.',!navigator.bluetooth?'Web Bluetooth unavailable.':'','Keep the page open and the phone awake while recording.'].filter(Boolean).join(' ');
+$('support').textContent=[!window.isSecureContext?'Open the HTTPS GitHub Pages link.':'',USE_WEBUSB?(navigator.usb?'Android USB v5: automatic stall recovery. Use InsoleRaw12WebUSB firmware and choose the XIAO / Smart Insole. Keep this page visible.':'This browser has no supported USB API.'):'USB uses native Web Serial.',!navigator.bluetooth?'Web Bluetooth unavailable.':'','The app requests a screen wake lock while connected.'].filter(Boolean).join(' ');
+$('usb-diagnostics').onclick=()=>download('nova-usb-diagnostics.json',JSON.stringify({version:'Android USB v5',createdUTC:new Date().toISOString(),userAgent:navigator.userAgent,transport:USE_WEBUSB?'WebUSB':'Web Serial',visible:document.visibilityState,wakeLockHeld:!!wakeLock,connected:mode,receivedBytes:usbState.bytes,completeScans:usbState.scans,reconnectAttempts:usbState.retries,lastError:usbState.lastError,recordingStopped:session?.stopReason||null,events:usbState.events},null,2),'application/json');
+function checkUsbHealth(){
+  if(!USE_WEBUSB||mode!=='USB'||!port||port.abortError)return;
+  if(performance.now()-(lastArrival||usbState.started)<5000)return;
+  const error=new Error(usbState.bytes?'USB bytes arrived without complete Raw12 scans. Confirm InsoleRaw12WebUSB firmware is running.':'USB stream did not start.');
+  error.noRetry=usbState.bytes>0&&usbState.scans===0;
+  usbLog('frame-timeout',{bytes:usbState.bytes,scans:usbState.scans});
+  port.abort(error).catch(e=>usbLog('abort-error',{message:e.message}));
+}
+document.addEventListener('visibilitychange',()=>{usbLog('visibility',{state:document.visibilityState});if(document.visibilityState==='visible'&&mode)keepScreenAwake();});
+navigator.usb?.addEventListener?.('disconnect',event=>{if(mode==='USB'&&port?.device===event.device){usbState.wanted=false;usbLog('device-removed');port.abort(new Error('USB device was removed. Reconnect it and tap Connect USB.')).catch(()=>{});}});
 window.addEventListener('beforeunload',e=>{if(recording||diskStarting||diskFinishing||session?.rows.length||disk?.pendingCount()){e.preventDefault();e.returnValue='';}});
-setInterval(()=>{controls();if(disk&&recording&&!disk.error)$('disk-status').textContent=`Recording to ${session.folder} · ${disk.saved.toLocaleString()} samples saved · ${disk.pendingCount().toLocaleString()} pending. Keep this tab open.`;if(fresh())renderReadings();else if(latest){pointerState=null;$('rate').innerHTML='— <em>Hz</em>';$('cal-live').textContent='—';$('total').innerHTML='— <em>N</em>';$('cop-marker').style.opacity=0;for(let i=0;i<16;i++){$(`zone-${i}`).style.fill='#d1d5db';$(`heat-${i}`).style.opacity=0;}renderReadings();$('cop-status').textContent='CoP unavailable: the stream is stale.';status('No fresh Raw12 data. Check the firmware and connection.');}if(session)$('record-status').textContent=`${recording?'● Recording · ':''}${session.sampleCount.toLocaleString()} samples · ${((session.lastTimeMs??0)/1000).toFixed(1)} s${session.source==='demo'?' · DEMO':''}`;},150);
+setInterval(()=>{controls();checkUsbHealth();if(disk&&recording&&!disk.error)$('disk-status').textContent=`Recording to ${session.folder} · ${disk.saved.toLocaleString()} samples saved · ${disk.pendingCount().toLocaleString()} pending. Keep this tab open.`;if(fresh()){renderReadings();if(mode!=='demo')status(`Receiving ${mode} · Raw12 · scan ${latest.sequence}`);}else if(latest){pointerState=null;$('rate').innerHTML='— <em>Hz</em>';$('cal-live').textContent='—';$('total').innerHTML='— <em>N</em>';$('cop-marker').style.opacity=0;for(let i=0;i<16;i++){$(`zone-${i}`).style.fill='#d1d5db';$(`heat-${i}`).style.opacity=0;}renderReadings();$('cop-status').textContent='CoP unavailable: the stream is stale.';status(mode==='USB'&&USE_WEBUSB?'USB data paused. Checking the connection…':'No fresh Raw12 data. Check the firmware and connection.');}if(session)$('record-status').textContent=`${recording?'● Recording · ':''}${session.sampleCount.toLocaleString()} samples · ${((session.lastTimeMs??0)/1000).toFixed(1)} s${session.source==='demo'?' · DEMO':''}${session.stopReason?' · '+session.stopReason:''}`;},150);
 renderCalibration();renderReadings();controls();
 </script></body></html>
